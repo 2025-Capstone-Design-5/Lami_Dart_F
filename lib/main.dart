@@ -3,6 +3,7 @@ import 'home_page.dart';
 import 'calendar_page.dart';
 import 'assistant_page.dart';
 import 'mypage.dart';
+import 'splash_screen.dart'; // 스플래시 화면 import 추가
 
 void main() {
   runApp(const MyApp());
@@ -19,7 +20,7 @@ class MyApp extends StatelessWidget {
         fontFamily: 'Inter',
         scaffoldBackgroundColor: const Color(0xFFF3EFEE),
       ),
-      home: const MainScreen(),
+      home: const SplashScreen(), // 시작점을 스플래시 화면으로 변경
       debugShowCheckedModeBanner: false,
     );
   }
