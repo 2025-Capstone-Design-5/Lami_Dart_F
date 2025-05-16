@@ -51,7 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   // 앱 로고
                   Image.asset(
-                    'assets/logo.png',
+                    'assets/images/Lami.png',
                     height: 120,
                     // 로고 파일이 없는 경우 아래 코드 사용
                     errorBuilder: (context, error, stackTrace) {

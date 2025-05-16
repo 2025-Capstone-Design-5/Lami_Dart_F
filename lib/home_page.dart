@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'shortest_route_page.dart';
 import 'time_setting_page.dart';
+import 'dart:async';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -13,6 +14,79 @@ class _HomePageState extends State<HomePage> {
   int selectedIconIndex = 0;
   TextEditingController searchController = TextEditingController();
 
+  // 준비 시간 관련 변수
+  Duration preparationTime = const Duration(minutes: 30); // 기본값 30분
+  Duration remainingTime = const Duration(minutes: 30); // 남은 시간 (초기값 30분)
+  Timer? countdownTimer;
+  String arrivalPeriod = '오전';
+  int arrivalHour = 8;
+  int arrivalMinute = 0;
+  bool isCountdownActive = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 필요한 초기화 작업이 있으면 여기에 추가
+  }
+
+  @override
+  void dispose() {
+    countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  // 준비 시간을 설정하는 콜백 함수
+  void setPrepTime(Duration newPrepTime) {
+    setState(() {
+      preparationTime = newPrepTime;
+      remainingTime = newPrepTime;
+
+      // 타이머가 실행 중이면 재시작
+      if (isCountdownActive) {
+        _startCountdown();
+      }
+    });
+  }
+
+  // 카운트다운 시작
+  void _startCountdown() {
+    // 기존 타이머 취소
+    countdownTimer?.cancel();
+
+    // 새 타이머 시작
+    isCountdownActive = true;
+    countdownTimer = Timer.periodic(
+      const Duration(seconds: 1),
+          (timer) {
+        setState(() {
+          if (remainingTime.inSeconds > 0) {
+            remainingTime = remainingTime - const Duration(seconds: 1);
+          } else {
+            countdownTimer?.cancel();
+            isCountdownActive = false;
+          }
+        });
+      },
+    );
+  }
+
+  // 포맷팅된 시간 문자열 반환 (00:00:00 형식)
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    String hours = twoDigits(duration.inHours);
+    String minutes = twoDigits(duration.inMinutes.remainder(60));
+    String seconds = twoDigits(duration.inSeconds.remainder(60));
+    return "$hours:$minutes:$seconds";
+  }
+
+  // 준비시간 표시 문자열 ("+HH:MM" 형식)
+  String _formatPrepTime() {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    String hours = twoDigits(preparationTime.inHours);
+    String minutes = twoDigits(preparationTime.inMinutes.remainder(60));
+    return "+$hours:$minutes";
+  }
+
   void _goToShortestRoutePage() {
     Navigator.push(
       context,
@@ -23,8 +97,21 @@ class _HomePageState extends State<HomePage> {
   void _goToTimeSettingPage() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const TimeSettingPage()),
-    );
+      MaterialPageRoute(
+        builder: (context) => TimeSettingPage(
+          onPrepTimeSet: setPrepTime,
+          initialArrivalPeriod: arrivalPeriod,
+          initialArrivalHour: arrivalHour,
+          initialArrivalMinute: arrivalMinute,
+          initialPrepTime: preparationTime,
+        ),
+      ),
+    ).then((_) {
+      // 페이지 복귀 후 필요한 작업 (예: 카운트다운 시작)
+      if (!isCountdownActive) {
+        _startCountdown();
+      }
+    });
   }
 
   @override
@@ -65,7 +152,7 @@ class _HomePageState extends State<HomePage> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
+                    boxShadow: const [
                       BoxShadow(
                         color: Colors.black12,
                         blurRadius: 2,
@@ -74,8 +161,8 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                   child: Column(
-                    children: const [
-                      Text(
+                    children: [
+                      const Text(
                         '남은 준비 시간',
                         style: TextStyle(
                           fontSize: 16,
@@ -83,23 +170,37 @@ class _HomePageState extends State<HomePage> {
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                      SizedBox(height: 8),
+                      const SizedBox(height: 8),
                       Text(
-                        '00:00:00',
-                        style: TextStyle(
+                        _formatDuration(remainingTime),
+                        style: const TextStyle(
                           fontSize: 40,
                           fontWeight: FontWeight.bold,
                           color: Colors.black,
                           letterSpacing: 2,
                         ),
                       ),
-                      SizedBox(height: 4),
+                      const SizedBox(height: 4),
                       Text(
-                        '+00:15',
-                        style: TextStyle(
+                        _formatPrepTime(),
+                        style: const TextStyle(
                           fontSize: 18,
                           color: Colors.green,
                           fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: isCountdownActive ? null : _startCountdown,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isCountdownActive ? Colors.grey : Colors.green,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Text(
+                          isCountdownActive ? '카운트다운 중' : '카운트다운 시작',
+                          style: const TextStyle(color: Colors.white),
                         ),
                       ),
                     ],

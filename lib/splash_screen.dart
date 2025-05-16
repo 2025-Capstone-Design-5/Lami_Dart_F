@@ -32,7 +32,7 @@ class _SplashScreenState extends State<SplashScreen> {
           children: [
             // 앱 로고 (assets/logo.png 파일이 필요합니다)
             Image.asset(
-              'assets/logo.png',
+              'assets/images/Lami.png',
               height: 150,
               // 로고 파일이 없는 경우 아래 코드 사용
               errorBuilder: (context, error, stackTrace) {
@@ -54,7 +54,7 @@ class _SplashScreenState extends State<SplashScreen> {
             const SizedBox(height: 30),
             // 앱 이름 또는 환영 메시지
             const Text(
-              '앱 이름',
+              '로딩중( or 어플리케이션 문구 같은 것?  )',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 28,
