@@ -7,6 +7,11 @@ class UpdatePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 화면 크기에 따라 폰트 크기를 조정하기 위한 변수
+    final screenWidth = MediaQuery.of(context).size.width;
+    final titleFontSize = screenWidth < 360 ? 18.0 : 22.0;
+    final contentFontSize = screenWidth < 360 ? 16.0 : 18.0;
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text('업데이트'),
@@ -47,37 +52,40 @@ class UpdatePage extends StatelessWidget {
                     children: [
                       Text(
                         '업데이트 내역',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Inter',
-                          fontWeight: FontWeight.w400,
-                          fontSize: 30,
+                          fontWeight: FontWeight.w600,
+                          fontSize: titleFontSize,
                           color: Color(0xFF334066),
                         ),
                       ),
                       const SizedBox(height: 16),
                       Row(
                         children: [
-                          Icon(Icons.notifications, size: 40, color: Color(0xFF334066)),
+                          Icon(Icons.notifications, size: 24, color: Color(0xFF334066)),
                           const SizedBox(width: 16),
-                          GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const UpdateDetailPage(
-                                    title: '24.04.15 업데이트 내역',
-                                    date: '2024-04-15',
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const UpdateDetailPage(
+                                      title: '24.04.15 업데이트 내역',
+                                      date: '2024-04-15',
+                                    ),
                                   ),
+                                );
+                              },
+                              child: Text(
+                                '24.04.15 업데이트 내역',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontWeight: FontWeight.w400,
+                                  fontSize: contentFontSize,
+                                  color: Colors.black,
                                 ),
-                              );
-                            },
-                            child: Text(
-                              '24.04.15 업데이트 내역',
-                              style: const TextStyle(
-                                fontFamily: 'Inter',
-                                fontWeight: FontWeight.w400,
-                                fontSize: 30,
-                                color: Colors.black,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ),
@@ -86,27 +94,30 @@ class UpdatePage extends StatelessWidget {
                       const SizedBox(height: 16),
                       Row(
                         children: [
-                          Icon(Icons.notifications, size: 40, color: Color(0xFF334066)),
+                          Icon(Icons.notifications, size: 24, color: Color(0xFF334066)),
                           const SizedBox(width: 16),
-                          GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const UpdateDetailPage(
-                                    title: '24.04.16 업데이트 내역',
-                                    date: '2024-04-16',
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const UpdateDetailPage(
+                                      title: '24.04.16 업데이트 내역',
+                                      date: '2024-04-16',
+                                    ),
                                   ),
+                                );
+                              },
+                              child: Text(
+                                '24.04.16 업데이트 내역',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontWeight: FontWeight.w400,
+                                  fontSize: contentFontSize,
+                                  color: Colors.black,
                                 ),
-                              );
-                            },
-                            child: Text(
-                              '24.04.16 업데이트 내역',
-                              style: const TextStyle(
-                                fontFamily: 'Inter',
-                                fontWeight: FontWeight.w400,
-                                fontSize: 30,
-                                color: Colors.black,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ),
@@ -145,4 +156,4 @@ class UpdatePage extends StatelessWidget {
       ),
     );
   }
-} 
+}
