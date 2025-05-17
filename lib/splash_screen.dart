@@ -54,7 +54,7 @@ class _SplashScreenState extends State<SplashScreen> {
             const SizedBox(height: 30),
             // 앱 이름 또는 환영 메시지
             const Text(
-              '로딩중( or 어플리케이션 문구 같은 것?  )',
+              '로딩중',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 28,
