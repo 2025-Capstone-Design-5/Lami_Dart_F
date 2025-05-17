@@ -16,11 +16,18 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
   bool showMap = false;
 
   // 검색 결과 예시 데이터
-  final List<Map<String, String>> searchResults = [
+  final List<Map<String, String>> allLocations = [
     {'name': '천안역', 'address': '충청남도 천안시 동남구 태조산길 103'},
     {'name': '아산역', 'address': '충청남도 아산시 배방읍 희망로 100'},
     {'name': '용산역', 'address': '서울특별시 용산구 한강대로 23길'},
+    {'name': '서울역', 'address': '서울특별시 중구 통일로 1'},
+    {'name': '부산역', 'address': '부산광역시 동구 중앙대로 206'},
+    {'name': '대전역', 'address': '대전광역시 동구 중앙로 215'},
+    {'name': '광주역', 'address': '광주광역시 북구 무등로 235'},
+    {'name': '대구역', 'address': '대구광역시 북구 태평로 161'},
   ];
+  
+  List<Map<String, String>> searchResults = [];
 
   @override
   Widget build(BuildContext context) {
@@ -67,6 +74,9 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
                           contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                         ),
                         style: const TextStyle(fontSize: 18),
+                        onChanged: (value) {
+                          _filterSearchResults(value);
+                        },
                         onTap: () {
                           setState(() {
                             showSearchResults = true;
@@ -74,20 +84,14 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
                           });
                         },
                         onSubmitted: (value) {
-                          setState(() {
-                            showSearchResults = true;
-                            showMap = false;
-                          });
+                          _filterSearchResults(value);
                         },
                       ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.search, color: Color(0xFF334066)),
                       onPressed: () {
-                        setState(() {
-                          showSearchResults = true;
-                          showMap = false;
-                        });
+                        _filterSearchResults(_searchController.text);
                       },
                     ),
                   ],
@@ -130,6 +134,24 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
     );
   }
 
+  // 검색어에 따라 결과 필터링
+  void _filterSearchResults(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        // 검색어가 비어있으면 모든 위치 표시
+        searchResults = List.from(allLocations);
+      } else {
+        // 검색어가 포함된 위치만 필터링
+        searchResults = allLocations
+            .where((location) =>
+                location['name']!.toLowerCase().contains(query.toLowerCase()))
+            .toList();
+      }
+      showSearchResults = true;
+      showMap = false;
+    });
+  }
+
   // 초기 화면 (검색 전)
   Widget _buildInitialView() {
     return Container(
@@ -166,51 +188,55 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
           ),
         ],
       ),
-      child: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: searchResults.length,
-        separatorBuilder: (context, index) => const Divider(height: 16),
-        itemBuilder: (context, index) {
-          return GestureDetector(
-            onTap: () {
-              setState(() {
-                searchedDestination = searchResults[index]['name'];
-                searchedAddress = searchResults[index]['address'];
-                showMap = true;
-                showSearchResults = false;
-              });
-            },
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      searchResults[index]['name'] ?? '',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w400,
-                        fontSize: 25,
-                        color: Color(0xFF334066),
+      child: searchResults.isEmpty
+          ? const Center(
+              child: Text('검색 결과가 없습니다.', style: TextStyle(fontSize: 16, color: Colors.black54)),
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: searchResults.length,
+              separatorBuilder: (context, index) => const Divider(height: 16),
+              itemBuilder: (context, index) {
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      searchedDestination = searchResults[index]['name'];
+                      searchedAddress = searchResults[index]['address'];
+                      showMap = true;
+                      showSearchResults = false;
+                    });
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            searchResults[index]['name'] ?? '',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w400,
+                              fontSize: 25,
+                              color: Color(0xFF334066),
+                            ),
+                          ),
+                          const Icon(Icons.arrow_forward_ios, size: 16, color: Color(0xFF334066)),
+                        ],
                       ),
-                    ),
-                    const Icon(Icons.arrow_forward_ios, size: 16, color: Color(0xFF334066)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  searchResults[index]['address'] ?? '',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w400,
-                    fontSize: 11,
-                    color: Color(0xFF334066),
+                      const SizedBox(height: 4),
+                      Text(
+                        searchResults[index]['address'] ?? '',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w400,
+                          fontSize: 11,
+                          color: Color(0xFF334066),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                );
+              },
             ),
-          );
-        },
-      ),
     );
   }
 
