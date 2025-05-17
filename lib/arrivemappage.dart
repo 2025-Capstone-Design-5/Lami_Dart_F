@@ -126,8 +126,8 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
         unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w400),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: '홈'),
-          BottomNavigationBarItem(icon: Icon(Icons.search), label: '검색'),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: '달력'),
+          BottomNavigationBarItem(icon: Icon(Icons.headset), label: '헤드셋'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: '내정보'),
         ],
       ),

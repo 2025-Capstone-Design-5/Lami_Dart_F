@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'settingspage.dart';
 import 'updatepage.dart';
 import 'favorite_places_page.dart';
+import 'login_screen.dart'; // 로그인 화면으로 이동하기 위한 import 추가
 
 class MyPage extends StatelessWidget {
   const MyPage({Key? key}) : super(key: key);
@@ -110,12 +111,54 @@ class MyPage extends StatelessWidget {
               leading: Icon(Icons.logout),
               title: Text('로그아웃'),
               trailing: Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {},
+              onTap: () {
+                // 로그아웃 처리 및 로그인 화면으로 이동
+                _showLogoutConfirmationDialog(context);
+              },
             ),
             // ... 추가 메뉴
           ],
         ),
       ),
+    );
+  }
+
+  // 로그아웃 확인 다이얼로그
+  void _showLogoutConfirmationDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('로그아웃'),
+          content: const Text('정말 로그아웃 하시겠습니까?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // 다이얼로그 닫기
+              },
+              child: const Text('취소'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // 다이얼로그 닫기
+                _logout(context); // 로그아웃 처리
+              },
+              child: const Text('확인'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // 로그아웃 처리 함수
+  void _logout(BuildContext context) {
+    // 여기에 실제 로그아웃 처리 로직 추가 (토큰 삭제, 사용자 정보 삭제 등)
+    
+    // 로그인 화면으로 이동 (이전 화면 스택 모두 제거)
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+      (route) => false, // 모든 이전 화면 제거
     );
   }
 }
