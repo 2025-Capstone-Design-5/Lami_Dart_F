@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'settingspage.dart';
 import 'updatepage.dart';
+import 'favorite_places_page.dart';
+
 class MyPage extends StatelessWidget {
   const MyPage({Key? key}) : super(key: key);
 
@@ -75,7 +77,12 @@ class MyPage extends StatelessWidget {
               leading: Icon(Icons.star, color: Colors.amber),
               title: Text('즐겨찾는 장소'),
               trailing: Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {},
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const FavoritePlacesPage()),
+                );
+              },
             ),
             ListTile(
               leading: Icon(Icons.notifications),
