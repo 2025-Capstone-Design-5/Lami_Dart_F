@@ -1,8 +1,20 @@
 import 'package:flutter/material.dart';
 import 'main.dart'; // MainScreen으로 이동하기 위한 import
+import 'signup_screen.dart'; // 회원가입 화면으로 이동하기 위한 import
+import 'mypage.dart'; // MyPage import 추가
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+  // 회원가입 정보를 저장할 변수 추가
+  final String? registeredName;
+  final String? registeredEmail;
+  final String? registeredId;
+
+  const LoginScreen({
+    Key? key,
+    this.registeredName,
+    this.registeredEmail,
+    this.registeredId,
+  }) : super(key: key);
 
   @override
   _LoginScreenState createState() => _LoginScreenState();
@@ -27,10 +39,16 @@ class _LoginScreenState extends State<LoginScreen> {
       // 여기에 실제 로그인 처리 로직 구현
       // API 연동, 사용자 인증 등의 코드 추가
 
-      // 로그인 성공 시 메인 화면으로 이동
+      // 로그인 성공 시 메인 화면으로 이동하면서 사용자 정보 전달
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const MainScreen()),
+        MaterialPageRoute(
+          builder: (context) => MainScreen(
+            userName: widget.registeredName ?? '홍길동', // 회원가입에서 전달받은 이름 사용
+            userEmail: widget.registeredEmail ?? 'myemail@email.com', // 회원가입에서 전달받은 이메일 사용
+            initialIndex: 0, // 홈 화면부터 시작
+          ),
+        ),
       );
     }
   }
@@ -218,6 +236,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextButton(
                         onPressed: () {
                           // 회원가입 화면으로 이동
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const SignupScreen()),
+                          );
                         },
                         child: const Text(
                           '회원가입',

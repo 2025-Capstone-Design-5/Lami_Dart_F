@@ -27,11 +27,21 @@ class MyApp extends StatelessWidget {
 }
 
 class MainScreen extends StatefulWidget {
+  // 사용자 정보를 저장할 변수 추가
+  final String userName;
+  final String userEmail;
+  // initialIndex 속성 추가
   final int initialIndex;
-  const MainScreen({Key? key, this.initialIndex = 0}) : super(key: key);
+
+  const MainScreen({
+    Key? key,
+    this.userName = '홍길동',
+    this.userEmail = 'myemail@email.com',
+    this.initialIndex = 0, // 기본값 설정
+  }) : super(key: key);
 
   @override
-  State<MainScreen> createState() => _MainScreenState();
+  _MainScreenState createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
@@ -48,11 +58,15 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       body: IndexedStack(
         index: selectedNavIndex,
-        children: const [
-          HomePage(),
-          CalendarPage(),
-          AssistantPage(),
-          MyPage(),
+        children: [
+          const HomePage(),
+          const CalendarPage(),
+          const AssistantPage(),
+          // MyPage에 사용자 정보 전달
+          MyPage(
+            userName: widget.userName,
+            userEmail: widget.userEmail,
+          ),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -71,10 +85,32 @@ class _MainScreenState extends State<MainScreen> {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: '홈'),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: '달력'),
-          BottomNavigationBarItem(icon: Icon(Icons.headset), label: '헤드셋'),
+          BottomNavigationBarItem(icon: Icon(Icons.headset), label: '라미'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: '내정보'),
         ],
       ),
     );
   }
+  
+  // 사용하지 않는 _buildPage 메서드 제거 또는 아래와 같이 수정
+  // 필요한 경우에만 사용하세요
+  /*
+  Widget _buildPage(int index) {
+    switch (index) {
+      case 0:
+        return const HomePage();
+      case 1:
+        return const CalendarPage();
+      case 2:
+        return const AssistantPage();
+      case 3: // 마이페이지
+        return MyPage(
+          userName: widget.userName,
+          userEmail: widget.userEmail,
+        );
+      default:
+        return Container();
+    }
+  }
+  */
 }

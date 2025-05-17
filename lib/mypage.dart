@@ -4,8 +4,26 @@ import 'updatepage.dart';
 import 'favorite_places_page.dart';
 import 'login_screen.dart'; // 로그인 화면으로 이동하기 위한 import 추가
 
-class MyPage extends StatelessWidget {
-  const MyPage({Key? key}) : super(key: key);
+// StatelessWidget에서 StatefulWidget으로 변경
+class MyPage extends StatefulWidget {
+  // 회원 정보를 저장할 변수 추가
+  final String userName;
+  final String userEmail;
+
+  // 생성자 수정 - 회원 정보를 매개변수로 받음
+  const MyPage({
+    Key? key,
+    this.userName = '홍길동', // 기본값 설정
+    this.userEmail = 'myemail@email.com', // 기본값 설정
+  }) : super(key: key);
+
+  @override
+  State<MyPage> createState() => _MyPageState();
+}
+
+class _MyPageState extends State<MyPage> {
+  // 선택된 교통수단을 추적하는 변수 (0: 지하철, 1: 버스, 2: 승용차)
+  int _selectedTransportation = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -35,40 +53,106 @@ class MyPage extends StatelessWidget {
               child: Icon(Icons.person, size: 50, color: Colors.white),
             ),
             const SizedBox(height: 16),
-            const Text(
-              '홍길동',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            Text(
+              widget.userName, // 하드코딩된 값 대신 전달받은 이름 사용
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'myemail@email.com',
-              style: TextStyle(fontSize: 16, color: Colors.black54),
+            Text(
+              widget.userEmail, // 하드코딩된 값 대신 전달받은 이메일 사용
+              style: const TextStyle(fontSize: 16, color: Colors.black54),
             ),
             const SizedBox(height: 32),
-            // 교통수단 항목
+            // 교통수단 항목 - 선택 기능 추가
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                Column(
-                  children: const [
-                    Icon(Icons.train, size: 36, color: Colors.blue),
-                    SizedBox(height: 4),
-                    Text('지하철', style: TextStyle(fontSize: 14)),
-                  ],
+                // 지하철 항목
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedTransportation = 0;
+                    });
+                  },
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.train,
+                        size: 36,
+                        color: _selectedTransportation == 0
+                            ? Colors.blue
+                            : Colors.grey,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '지하철',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: _selectedTransportation == 0
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                Column(
-                  children: const [
-                    Icon(Icons.directions_bus, size: 36, color: Colors.green),
-                    SizedBox(height: 4),
-                    Text('버스', style: TextStyle(fontSize: 14)),
-                  ],
+                // 버스 항목
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedTransportation = 1;
+                    });
+                  },
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.directions_bus,
+                        size: 36,
+                        color: _selectedTransportation == 1
+                            ? Colors.green
+                            : Colors.grey,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '버스',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: _selectedTransportation == 1
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                Column(
-                  children: const [
-                    Icon(Icons.directions_car, size: 36, color: Colors.orange),
-                    SizedBox(height: 4),
-                    Text('승용차', style: TextStyle(fontSize: 14)),
-                  ],
+                // 승용차 항목
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedTransportation = 2;
+                    });
+                  },
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.directions_car,
+                        size: 36,
+                        color: _selectedTransportation == 2
+                            ? Colors.orange
+                            : Colors.grey,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '승용차',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: _selectedTransportation == 2
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
