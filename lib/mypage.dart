@@ -3,6 +3,7 @@ import 'settingspage.dart';
 import 'updatepage.dart';
 import 'favorite_places_page.dart';
 import 'login_screen.dart'; // 로그인 화면으로 이동하기 위한 import 추가
+import 'search_history_service.dart';
 
 // StatelessWidget에서 StatefulWidget으로 변경
 class MyPage extends StatefulWidget {
@@ -24,6 +25,32 @@ class MyPage extends StatefulWidget {
 class _MyPageState extends State<MyPage> {
   // 선택된 교통수단을 추적하는 변수 (0: 지하철, 1: 버스, 2: 승용차)
   int _selectedTransportation = 0;
+  
+  // 검색 기록 서비스
+  final SearchHistoryService _searchHistoryService = SearchHistoryService();
+
+  @override
+  void initState() {
+    super.initState();
+    // 데이터 로드
+    _loadMostUsedTransportation();
+    
+    // 검색 기록 변경 시 UI 업데이트
+    _searchHistoryService.addListener(_loadMostUsedTransportation);
+  }
+  
+  @override
+  void dispose() {
+    _searchHistoryService.removeListener(_loadMostUsedTransportation);
+    super.dispose();
+  }
+  
+  // 가장 많이 사용한 교통수단 로드
+  void _loadMostUsedTransportation() {
+    setState(() {
+      _selectedTransportation = _searchHistoryService.getMostUsedTransportation();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -206,7 +233,7 @@ class _MyPageState extends State<MyPage> {
       ),
     );
   }
-
+  
   // 로그아웃 확인 다이얼로그
   void _showLogoutConfirmationDialog(BuildContext context) {
     showDialog(
@@ -244,5 +271,33 @@ class _MyPageState extends State<MyPage> {
       MaterialPageRoute(builder: (context) => const LoginScreen()),
       (route) => false, // 모든 이전 화면 제거
     );
+  }
+  
+  // 교통수단 아이콘 가져오기
+  IconData _getTransportationIcon(int type) {
+    switch (type) {
+      case 0:
+        return Icons.train;
+      case 1:
+        return Icons.directions_bus;
+      case 2:
+        return Icons.directions_car;
+      default:
+        return Icons.train;
+    }
+  }
+  
+  // 교통수단 색상 가져오기
+  Color _getTransportationColor(int type) {
+    switch (type) {
+      case 0:
+        return Colors.blue;
+      case 1:
+        return Colors.green;
+      case 2:
+        return Colors.orange;
+      default:
+        return Colors.blue;
+    }
   }
 }
