@@ -41,16 +41,19 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
   @override
   void initState() {
     super.initState();
-    // 데이터 로드
+    // 데이터 로드 (최초 1회만)
     _loadData();
-    
-    // 검색 기록 변경 시 UI 업데이트
-    _searchHistoryService.addListener(_loadData);
+    // 검색 기록 변경 시 UI만 갱신
+    _searchHistoryService.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
-  
+
   @override
   void dispose() {
-    _searchHistoryService.removeListener(_loadData);
+    _searchHistoryService.removeListener(() {
+      if (mounted) setState(() {});
+    });
     super.dispose();
   }
   
