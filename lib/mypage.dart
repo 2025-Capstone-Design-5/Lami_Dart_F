@@ -91,96 +91,86 @@ class _MyPageState extends State<MyPage> {
             ),
             const SizedBox(height: 32),
             // 교통수단 항목 - 선택 기능 추가
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            // 교통수단 항목 - 자동 선택으로 변경 (클릭 기능 제거)
+            Column(
               children: [
-                // 지하철 항목
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedTransportation = 0;
-                    });
-                  },
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.train,
-                        size: 36,
-                        color: _selectedTransportation == 0
-                            ? Colors.blue
-                            : Colors.grey,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '지하철',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: _selectedTransportation == 0
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
+                Text(
+                  '가장 많이 사용한 교통수단',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                // 버스 항목
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedTransportation = 1;
-                    });
-                  },
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.directions_bus,
-                        size: 36,
-                        color: _selectedTransportation == 1
-                            ? Colors.green
-                            : Colors.grey,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '버스',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: _selectedTransportation == 1
-                              ? FontWeight.bold
-                              : FontWeight.normal,
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    // 지하철 항목
+                    Column(
+                      children: [
+                        Icon(
+                          Icons.train,
+                          size: 36,
+                          color: _selectedTransportation == 0
+                              ? Colors.blue
+                              : Colors.grey,
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                // 승용차 항목
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedTransportation = 2;
-                    });
-                  },
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.directions_car,
-                        size: 36,
-                        color: _selectedTransportation == 2
-                            ? Colors.orange
-                            : Colors.grey,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '승용차',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: _selectedTransportation == 2
-                              ? FontWeight.bold
-                              : FontWeight.normal,
+                        const SizedBox(height: 4),
+                        Text(
+                          '지하철',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: _selectedTransportation == 0
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+                    // 버스 항목
+                    Column(
+                      children: [
+                        Icon(
+                          Icons.directions_bus,
+                          size: 36,
+                          color: _selectedTransportation == 1
+                              ? Colors.green
+                              : Colors.grey,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '버스',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: _selectedTransportation == 1
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                    // 승용차 항목
+                    Column(
+                      children: [
+                        Icon(
+                          Icons.directions_car,
+                          size: 36,
+                          color: _selectedTransportation == 2
+                              ? Colors.orange
+                              : Colors.grey,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '승용차',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: _selectedTransportation == 2
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 8),
               ],
             ),
             const SizedBox(height: 24),
@@ -265,7 +255,7 @@ class _MyPageState extends State<MyPage> {
   // 로그아웃 처리 함수
   void _logout(BuildContext context) {
     // 여기에 실제 로그아웃 처리 로직 추가 (토큰 삭제, 사용자 정보 삭제 등)
-    
+
     // 로그인 화면으로 이동 (이전 화면 스택 모두 제거)
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const LoginScreen()),
