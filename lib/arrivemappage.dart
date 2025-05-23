@@ -41,19 +41,17 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
   @override
   void initState() {
     super.initState();
-    // 데이터 로드 (최초 1회만)
     _loadData();
-    // 검색 기록 변경 시 UI만 갱신
-    _searchHistoryService.addListener(() {
-      if (mounted) setState(() {});
-    });
+    _searchHistoryService.addListener(_updateUI);
+  }
+
+  void _updateUI() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _searchHistoryService.removeListener(() {
-      if (mounted) setState(() {});
-    });
+    _searchHistoryService.removeListener(_updateUI);
     super.dispose();
   }
   
@@ -62,11 +60,15 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
     await _searchHistoryService.loadData();
     if (mounted) {
       setState(() {
-        // 검색 기록을 가져와서 최신순으로 정렬
-        searchHistory = _searchHistoryService.getAllSearchHistory();
+        // 현재 선택된 교통수단에 따라 검색 기록 필터링 (최대 5개)
+        searchHistory = _searchHistoryService.getSearchHistoryByTransportation(_selectedTransportation);
         // 검색 횟수(count)를 기준으로 내림차순 정렬
         searchHistory.sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
-        print('검색 기록 로드됨: ${searchHistory.length}개 항목');
+        // 최대 5개까지만 표시
+        if (searchHistory.length > 5) {
+          searchHistory = searchHistory.sublist(0, 5);
+        }
+        print('검색 기록 로드됨: ${searchHistory.length}개 항목 (교통수단: $_selectedTransportation)');
       });
     }
   }
@@ -100,6 +102,8 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
                   onTap: () {
                     setState(() {
                       _selectedTransportation = 0;
+                      // 교통수단 변경 시 검색 기록 다시 로드
+                      _loadData();
                     });
                   },
                   child: Column(
@@ -129,6 +133,8 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
                   onTap: () {
                     setState(() {
                       _selectedTransportation = 1;
+                      // 교통수단 변경 시 검색 기록 다시 로드
+                      _loadData();
                     });
                   },
                   child: Column(
@@ -158,6 +164,8 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
                   onTap: () {
                     setState(() {
                       _selectedTransportation = 2;
+                      // 교통수단 변경 시 검색 기록 다시 로드
+                      _loadData();
                     });
                   },
                   child: Column(
@@ -318,20 +326,15 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
                               searchedAddress = searchResults[index]['address'];
                               showMap = true;
                               showSearchResults = false;
-                              _searchController.text = searchedDestination!;
                               
-                              // 검색 기록 저장
+                              // 검색 기록 저장 - 현재 선택된 교통수단 값 사용
                               _searchHistoryService.addSearchHistory(
                                 searchedDestination!,
                                 searchedAddress!,
                                 _selectedTransportation
                               );
-                              
-                              // 검색 기록 다시 로드
                               _loadData();
                             });
-                            
-                            // 검색 완료 메시지
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text('$searchedDestination 검색 완료 (${_getTransportationName(_selectedTransportation)})'),
@@ -350,8 +353,8 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        '최근 검색 기록',
+                      Text(
+                        '${_getTransportationName(_selectedTransportation)} 검색 기록',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -360,12 +363,13 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
                       if (searchHistory.isNotEmpty)
                         TextButton(
                           onPressed: () {
-                            _searchHistoryService.clearAllSearchHistory();
+                            // 현재 선택된 교통수단의 검색 기록만 삭제
+                            _searchHistoryService.clearTransportationSearchHistory(_selectedTransportation);
                             setState(() {
                               searchHistory = [];
                             });
                           },
-                          child: const Text('전체 삭제'),
+                          child: Text('${_getTransportationName(_selectedTransportation)} 기록 삭제'),
                         ),
                     ],
                   ),

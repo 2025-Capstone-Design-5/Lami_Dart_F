@@ -36,12 +36,19 @@ class _FavoritePlacesPageState extends State<FavoritePlacesPage> {
   
   // 데이터 로드
   void _loadData() {
-    setState(() {
+    // 선택된 교통수단에 따라 자주 찾는 장소 필터링 (최대 5개)
+    if (_selectedTransportationFilter == null) {
+      // '전체' 선택 시 모든 교통수단의 자주 찾는 장소 표시
+      frequentPlaces = _searchHistoryService.getMostSearchedPlaces(limit: 5);
+    } else {
+      // 특정 교통수단의 자주 찾는 장소만 표시
       frequentPlaces = _searchHistoryService.getMostSearchedPlaces(
-        limit: 10, 
-        transportationType: _selectedTransportationFilter
+        limit: 5,
+        transportationType: _selectedTransportationFilter,
       );
-    });
+    }
+    
+    setState(() {});
   }
 
   @override

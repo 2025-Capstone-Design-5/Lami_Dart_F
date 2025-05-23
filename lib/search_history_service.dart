@@ -45,8 +45,11 @@ class SearchHistoryService extends ChangeNotifier {
     // 해당 교통수단의 검색 기록 맵 가져오기
     var transportationMap = _searchHistoryByTransportation[transportationType]!;
     
+    print('검색 기록 추가: $placeName, 교통수단: $transportationType');
+    
     if (transportationMap.containsKey(placeName)) {
       transportationMap[placeName]!['count'] = (transportationMap[placeName]!['count'] as int) + 1;
+      print('기존 검색 기록 업데이트: $placeName, 횟수: ${transportationMap[placeName]!['count']}');
     } else {
       transportationMap[placeName] = {
         'name': placeName,
@@ -54,6 +57,7 @@ class SearchHistoryService extends ChangeNotifier {
         'count': 1,
         'transportationType': transportationType,
       };
+      print('새 검색 기록 추가: $placeName, 교통수단: $transportationType');
     }
     
     // 교통수단 사용 횟수 증가
@@ -94,6 +98,7 @@ class SearchHistoryService extends ChangeNotifier {
 
   // 특정 교통수단의 모든 검색 기록 삭제
   void clearTransportationSearchHistory(int transportationType) {
+    // 특정 교통수단의 검색 기록만 삭제
     _searchHistoryByTransportation[transportationType]!.clear();
     _saveSearchHistory();
     notifyListeners();
@@ -116,7 +121,7 @@ class SearchHistoryService extends ChangeNotifier {
   }
 
   // 가장 많이 검색한 장소 가져오기 (교통수단별 필터링 옵션 추가)
-  List<Map<String, dynamic>> getMostSearchedPlaces({int limit = 10, int? transportationType}) {
+  List<Map<String, dynamic>> getMostSearchedPlaces({int limit = 5, int? transportationType}) {
     List<Map<String, dynamic>> places = [];
     
     if (transportationType != null) {
