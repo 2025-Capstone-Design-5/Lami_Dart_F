@@ -6,9 +6,18 @@ class Event {
   final String content;
   final DateTime date;
   final String id;
+  final String? title;  // title 속성 추가
+  final String? time;   // time 속성 추가
 
-  Event({required this.content, required this.date})
-      : id = '${date.toString()}_${DateTime.now().millisecondsSinceEpoch}';
+  Event({
+    required this.content,
+    required this.date,
+    this.title,
+    this.time,
+  }) : id = '${date.toString()}_${DateTime.now().millisecondsSinceEpoch}';
+
+  // content를 title로 사용하는 getter 추가 (backward compatibility)
+  String get displayTitle => title ?? content;
 }
 
 // 일정 데이터 관리를 위한 서비스 클래스
@@ -42,7 +51,7 @@ class EventService extends ChangeNotifier {
     return _events[key] ?? [];
   }
 
-  // 일정 추가 함수
+  // 일정 추가 함수 (기존 버전 - backward compatibility)
   void addEvent(DateTime date, String content) {
     if (content.trim().isEmpty) return;
 
@@ -50,7 +59,28 @@ class EventService extends ChangeNotifier {
     if (!_events.containsKey(key)) {
       _events[key] = [];
     }
-    _events[key]!.add(Event(content: content.trim(), date: date));
+    _events[key]!.add(Event(
+      content: content.trim(),
+      date: date,
+      title: content.trim(), // content를 title로도 설정
+    ));
+    notifyListeners();
+  }
+
+  // 일정 추가 함수 (새 버전 - title과 time 포함)
+  void addEventWithDetails(DateTime date, String content, {String? title, String? time}) {
+    if (content.trim().isEmpty) return;
+
+    final key = dateToKey(date);
+    if (!_events.containsKey(key)) {
+      _events[key] = [];
+    }
+    _events[key]!.add(Event(
+      content: content.trim(),
+      date: date,
+      title: title?.trim() ?? content.trim(),
+      time: time?.trim(),
+    ));
     notifyListeners();
   }
 
