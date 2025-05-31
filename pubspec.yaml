@@ -16,7 +16,7 @@ dependencies:
   shared_preferences: ^2.2.2
   # 알람 기능을 위한 패키지들 추가
   audioplayers: ^5.2.1        # 소리 재생용
-  vibration: ^1.8.4           # 진동 효과용
+  haptic_feedback: ^0.4.2     # 진동 효과용 (vibration 대체)
   permission_handler: ^11.1.0  # 권한 관리용
   wakelock_plus: ^1.2.1       # 화면 켜짐 유지용
   flutter_local_notifications: ^17.2.2  # 로컬 알림용

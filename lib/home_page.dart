@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:vibration/vibration.dart';
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'shortest_route_page.dart';
@@ -182,11 +182,9 @@ class _HomePageState extends State<HomePage> {
     });
 
     // 진동 시작 (반복)
-    _vibrationTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
+    _vibrationTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) {
       if (_isAlarmRinging) {
-        if (await Vibration.hasVibrator() ?? false) {
-          Vibration.vibrate(duration: 500);
-        }
+        HapticFeedback.heavyImpact(); // 강한 진동
       }
     });
 
@@ -206,7 +204,6 @@ class _HomePageState extends State<HomePage> {
     _alarmTimer?.cancel();
     _vibrationTimer?.cancel();
     _audioPlayer?.stop();
-    Vibration.cancel();
     WakelockPlus.disable();
   }
 
