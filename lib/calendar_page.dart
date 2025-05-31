@@ -1,6 +1,100 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'event_service.dart';
+// 일정 데이터 모델
+class Event {
+  final String content;
+  final DateTime date;
+  final String id;
+  final String? title;
+  final String? time;
+  final bool isAlarmEvent;
+  final DateTime? alarmTime;
+  final String? arrivalTime;
+
+  Event({
+    required this.content,
+    required this.date,
+    this.title,
+    this.time,
+    this.isAlarmEvent = false,
+    this.alarmTime,
+    this.arrivalTime,
+  }) : id = '${date.toString()}_${DateTime.now().millisecondsSinceEpoch}';
+
+  String get displayTitle => title ?? content;
+}
+
+// 일정 데이터 관리를 위한 서비스 클래스
+class EventService extends ChangeNotifier {
+  static final EventService _instance = EventService._internal();
+  factory EventService() => _instance;
+  EventService._internal();
+
+  final Map<String, List<Event>> _events = {};
+
+  String dateToKey(DateTime date) {
+    return DateFormat('yyyy-MM-dd').format(date);
+  }
+
+  bool hasEvents(DateTime date) {
+    final key = dateToKey(date);
+    return _events.containsKey(key) && _events[key]!.isNotEmpty;
+  }
+
+  List<Event> getEvents(DateTime date) {
+    final key = dateToKey(date);
+    return _events[key] ?? [];
+  }
+
+  void addEvent(DateTime date, String content) {
+    if (content.trim().isEmpty) return;
+
+    final key = dateToKey(date);
+    if (!_events.containsKey(key)) {
+      _events[key] = [];
+    }
+    _events[key]!.add(Event(
+      content: content.trim(),
+      date: date,
+      title: content.trim(),
+      isAlarmEvent: false,
+    ));
+    notifyListeners();
+  }
+
+  void addAlarmEvent(DateTime alarmTime, DateTime arrivalDate, String arrivalTimeString) {
+    final alarmDateKey = dateToKey(alarmTime);
+    final alarmContent = '알람: ${DateFormat('yyyy-MM-dd').format(arrivalDate)} $arrivalTimeString 도착 준비';
+
+    if (!_events.containsKey(alarmDateKey)) {
+      _events[alarmDateKey] = [];
+    }
+
+    _events[alarmDateKey]!.add(Event(
+      content: alarmContent,
+      date: alarmTime,
+      title: '출발 알람',
+      time: DateFormat('HH:mm').format(alarmTime),
+      isAlarmEvent: true,
+      alarmTime: alarmTime,
+      arrivalTime: arrivalTimeString,
+    ));
+
+    notifyListeners();
+  }
+
+  void deleteEvent(DateTime date, String eventId) {
+    final key = dateToKey(date);
+    if (_events.containsKey(key)) {
+      _events[key]!.removeWhere((event) => event.id == eventId);
+      if (_events[key]!.isEmpty) {
+        _events.remove(key);
+      }
+      notifyListeners();
+    }
+  }
+}
 
 class CalendarPage extends StatefulWidget {
   const CalendarPage({Key? key}) : super(key: key);
@@ -12,8 +106,6 @@ class CalendarPage extends StatefulWidget {
 class _CalendarPageState extends State<CalendarPage> {
   late DateTime _currentMonth;
   late List<DateTime?> _calendarDays;
-
-  // 이벤트 서비스 인스턴스
   final EventService _eventService = EventService();
 
   @override
@@ -21,9 +113,23 @@ class _CalendarPageState extends State<CalendarPage> {
     super.initState();
     _currentMonth = DateTime.now();
     _calendarDays = _generateCalendarDays(_currentMonth);
+
+    // EventService 변경사항 감지
+    _eventService.addListener(_onEventServiceChanged);
   }
 
-  // 이전 달로 이동
+  @override
+  void dispose() {
+    _eventService.removeListener(_onEventServiceChanged);
+    super.dispose();
+  }
+
+  void _onEventServiceChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   void _previousMonth() {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1, 1);
@@ -31,7 +137,6 @@ class _CalendarPageState extends State<CalendarPage> {
     });
   }
 
-  // 다음 달로 이동
   void _nextMonth() {
     setState(() {
       _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1, 1);
@@ -39,7 +144,6 @@ class _CalendarPageState extends State<CalendarPage> {
     });
   }
 
-  // 현재 달로 이동
   void _goToToday() {
     setState(() {
       _currentMonth = DateTime.now();
@@ -47,21 +151,13 @@ class _CalendarPageState extends State<CalendarPage> {
     });
   }
 
-  // 달력 날짜들 생성
   List<DateTime?> _generateCalendarDays(DateTime month) {
-    // 해당 월의 첫째 날
     final firstDayOfMonth = DateTime(month.year, month.month, 1);
-
-    // 해당 월의 마지막 날
     final lastDayOfMonth = DateTime(month.year, month.month + 1, 0);
-
-    // 첫째 날의 요일 (0: 일요일, 1: 월요일, ...)
     final firstWeekday = firstDayOfMonth.weekday % 7;
+    final calendarDays = List<DateTime?>.filled(42, null);
 
-    // 전체 캘린더 날짜 (이전 달 + 현재 달 + 다음 달)
-    final calendarDays = List<DateTime?>.filled(42, null); // 6주 * 7일
-
-    // 이전 달의 날짜들 채우기
+    // 이전 달의 날짜들
     final prevMonth = DateTime(month.year, month.month - 1, 1);
     final daysInPrevMonth = DateTime(month.year, month.month, 0).day;
 
@@ -73,12 +169,12 @@ class _CalendarPageState extends State<CalendarPage> {
       );
     }
 
-    // 현재 달의 날짜들 채우기
+    // 현재 달의 날짜들
     for (int i = 1; i <= lastDayOfMonth.day; i++) {
       calendarDays[firstWeekday + i - 1] = DateTime(month.year, month.month, i);
     }
 
-    // 다음 달의 날짜들 채우기
+    // 다음 달의 날짜들
     final nextMonth = DateTime(month.year, month.month + 1, 1);
     int nextMonthDay = 1;
     for (int i = firstWeekday + lastDayOfMonth.day; i < 42; i++) {
@@ -90,6 +186,26 @@ class _CalendarPageState extends State<CalendarPage> {
     }
 
     return calendarDays;
+  }
+
+  Map<String, dynamic> _getEventInfo(DateTime date) {
+    final events = _eventService.getEvents(date);
+    bool hasNormalEvents = false;
+    bool hasAlarmEvents = false;
+
+    for (Event event in events) {
+      if (event.isAlarmEvent) {
+        hasAlarmEvents = true;
+      } else {
+        hasNormalEvents = true;
+      }
+    }
+
+    return {
+      'hasNormalEvents': hasNormalEvents,
+      'hasAlarmEvents': hasAlarmEvents,
+      'eventCount': events.length,
+    };
   }
 
   @override
@@ -144,7 +260,9 @@ class _CalendarPageState extends State<CalendarPage> {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color: d == '일' ? Colors.red : (d == '토' ? Colors.blue : Colors.black),
+                      color: d == '일'
+                          ? Colors.red
+                          : (d == '토' ? Colors.blue : Colors.black),
                     ),
                   ),
                 ),
@@ -156,7 +274,7 @@ class _CalendarPageState extends State<CalendarPage> {
             Expanded(
               child: GridView.builder(
                 physics: const NeverScrollableScrollPhysics(),
-                itemCount: 42, // 6주 * 7일
+                itemCount: 42,
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 7,
                   mainAxisSpacing: 8,
@@ -174,12 +292,12 @@ class _CalendarPageState extends State<CalendarPage> {
                       date.day == today.day;
 
                   final isCurrentMonth = date.month == _currentMonth.month;
-
-                  // 해당 날짜에 일정이 있는지 확인
-                  final hasEvents = _eventService.hasEvents(date);
-
-                  // 주말 여부 확인 (0: 일요일, 6: 토요일)
-                  final isWeekend = date.weekday == DateTime.sunday || date.weekday == DateTime.saturday;
+                  final eventInfo = _getEventInfo(date);
+                  final hasNormalEvents = eventInfo['hasNormalEvents'] as bool;
+                  final hasAlarmEvents = eventInfo['hasAlarmEvents'] as bool;
+                  final eventCount = eventInfo['eventCount'] as int;
+                  final isWeekend = date.weekday == DateTime.sunday ||
+                      date.weekday == DateTime.saturday;
 
                   return GestureDetector(
                     onTap: () {
@@ -192,11 +310,9 @@ class _CalendarPageState extends State<CalendarPage> {
                             events: _eventService.getEvents(date),
                             onAddEvent: (date, content) {
                               _eventService.addEvent(date, content);
-                              setState(() {}); // UI 갱신
                             },
                             onDeleteEvent: (date, eventId) {
                               _eventService.deleteEvent(date, eventId);
-                              setState(() {}); // UI 갱신
                             },
                           ),
                         );
@@ -222,18 +338,53 @@ class _CalendarPageState extends State<CalendarPage> {
                               color: !isCurrentMonth
                                   ? Colors.grey.withOpacity(0.5)
                                   : isWeekend
-                                  ? (date.weekday == DateTime.sunday ? Colors.red : Colors.blue)
+                                  ? (date.weekday == DateTime.sunday
+                                  ? Colors.red
+                                  : Colors.blue)
                                   : Colors.black,
                             ),
                           ),
-                          if (hasEvents && isCurrentMonth)
+                          // 이벤트 인디케이터
+                          if ((hasNormalEvents || hasAlarmEvents) && isCurrentMonth)
                             Container(
                               margin: const EdgeInsets.only(top: 4),
-                              height: 6,
-                              width: 6,
-                              decoration: BoxDecoration(
-                                color: Colors.green,
-                                shape: BoxShape.circle,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  if (hasNormalEvents)
+                                    Container(
+                                      height: 6,
+                                      width: 6,
+                                      margin: const EdgeInsets.symmetric(horizontal: 1),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.blue,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                  if (hasAlarmEvents)
+                                    Container(
+                                      height: 6,
+                                      width: 6,
+                                      margin: const EdgeInsets.symmetric(horizontal: 1),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.orange,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          // 이벤트 개수 표시
+                          if (eventCount > 2 && isCurrentMonth)
+                            Container(
+                              margin: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                '+${eventCount - 2}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                         ],
@@ -244,6 +395,7 @@ class _CalendarPageState extends State<CalendarPage> {
               ),
             ),
             const SizedBox(height: 12),
+            // 범례
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -259,27 +411,35 @@ class _CalendarPageState extends State<CalendarPage> {
                 const SizedBox(width: 6),
                 const Text(
                   '오늘',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.black54,
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.black54),
                 ),
                 const SizedBox(width: 16),
                 Container(
                   height: 6,
                   width: 6,
                   decoration: const BoxDecoration(
-                    color: Colors.green,
+                    color: Colors.blue,
                     shape: BoxShape.circle,
                   ),
                 ),
                 const SizedBox(width: 6),
                 const Text(
-                  '일정 있음',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.black54,
+                  '일반 일정',
+                  style: TextStyle(fontSize: 14, color: Colors.black54),
+                ),
+                const SizedBox(width: 16),
+                Container(
+                  height: 6,
+                  width: 6,
+                  decoration: const BoxDecoration(
+                    color: Colors.orange,
+                    shape: BoxShape.circle,
                   ),
+                ),
+                const SizedBox(width: 6),
+                const Text(
+                  '알람 일정',
+                  style: TextStyle(fontSize: 14, color: Colors.black54),
                 ),
               ],
             ),
@@ -318,8 +478,20 @@ class _CalendarPopupState extends State<_CalendarPopup> {
     super.dispose();
   }
 
+  String _formatTime(DateTime dateTime) {
+    int hour = dateTime.hour;
+    int minute = dateTime.minute;
+    String period = hour >= 12 ? '오후' : '오전';
+    int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+
+    return '$period ${displayHour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final alarmEvents = widget.events.where((event) => event.isAlarmEvent).toList();
+    final normalEvents = widget.events.where((event) => !event.isAlarmEvent).toList();
+
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       title: Column(
@@ -336,70 +508,187 @@ class _CalendarPopupState extends State<_CalendarPopup> {
           const SizedBox(height: 8),
           const Text(
             '오늘의 일정',
-            style: TextStyle(
-              fontSize: 15,
-              color: Colors.black54,
-            ),
+            style: TextStyle(fontSize: 15, color: Colors.black54),
           ),
         ],
       ),
       content: Container(
         width: double.maxFinite,
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.5,
+          maxHeight: MediaQuery.of(context).size.height * 0.6,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 기존 일정 목록
-            if (widget.events.isNotEmpty)
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: widget.events.length,
-                  itemBuilder: (context, index) {
-                    final event = widget.events[index];
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        event.content,
-                        style: TextStyle(fontSize: 16),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 알람 일정 섹션
+              if (alarmEvents.isNotEmpty) ...[
+                Row(
+                  children: [
+                    Container(
+                      height: 8,
+                      width: 8,
+                      decoration: const BoxDecoration(
+                        color: Colors.orange,
+                        shape: BoxShape.circle,
                       ),
-                      trailing: IconButton(
-                        icon: Icon(Icons.delete, color: Colors.red),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      '알람 일정',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ...alarmEvents.map((event) => Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.alarm, color: Colors.orange, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              event.content,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (event.alarmTime != null)
+                              Text(
+                                '알람: ${_formatTime(event.alarmTime!)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            if (event.arrivalTime != null)
+                              Text(
+                                '도착: ${event.arrivalTime}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red, size: 20),
                         onPressed: () {
                           widget.onDeleteEvent(widget.date, event.id);
                           Navigator.pop(context);
                         },
                       ),
-                    );
-                  },
-                ),
-              ),
-            if (widget.events.isNotEmpty)
-              Divider(color: Colors.grey.withOpacity(0.3)),
+                    ],
+                  ),
+                )),
+                if (normalEvents.isNotEmpty) const SizedBox(height: 16),
+              ],
 
-            // 새로운 일정 입력 필드
-            TextField(
-              controller: _controller,
-              autofocus: widget.events.isEmpty,
-              decoration: InputDecoration(
-                hintText: '일정 입력',
-                hintStyle: TextStyle(
-                  color: Colors.black.withOpacity(0.3),
-                  fontSize: 16,
+              // 일반 일정 섹션
+              if (normalEvents.isNotEmpty) ...[
+                Row(
+                  children: [
+                    Container(
+                      height: 8,
+                      width: 8,
+                      decoration: const BoxDecoration(
+                        color: Colors.blue,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      '일반 일정',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue,
+                      ),
+                    ),
+                  ],
                 ),
-                filled: true,
-                fillColor: const Color(0xFFF3EFEE),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+                const SizedBox(height: 8),
+                ...normalEvents.map((event) => Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                    leading: Container(
+                      height: 6,
+                      width: 6,
+                      decoration: const BoxDecoration(
+                        color: Colors.blue,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    title: Text(
+                      event.content,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                      onPressed: () {
+                        widget.onDeleteEvent(widget.date, event.id);
+                        Navigator.pop(context);
+                      },
+                    ),
+                  ),
+                )),
+              ],
+
+              if (widget.events.isNotEmpty)
+                Divider(color: Colors.grey.withOpacity(0.3)),
+
+              // 새로운 일정 입력
+              const Text(
+                '새 일정 추가',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black54,
                 ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
               ),
-              style: const TextStyle(fontSize: 16),
-            ),
-          ],
+              const SizedBox(height: 8),
+              TextField(
+                controller: _controller,
+                autofocus: widget.events.isEmpty,
+                decoration: InputDecoration(
+                  hintText: '일정 입력',
+                  hintStyle: TextStyle(
+                    color: Colors.black.withOpacity(0.3),
+                    fontSize: 16,
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFFF3EFEE),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: 14,
+                    horizontal: 12,
+                  ),
+                ),
+                style: const TextStyle(fontSize: 16),
+              ),
+            ],
+          ),
         ),
       ),
       actions: [

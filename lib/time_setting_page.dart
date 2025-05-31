@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:intl/intl.dart';
+import 'event_service.dart'; // EventService import 추가
 
 class TimeSettingPage extends StatefulWidget {
   final Function(Duration)? onPrepTimeSet;
-  final Function(String, int, int)? onArrivalTimeSet;
+  final Function(String, int, int, DateTime)? onArrivalTimeSet;
   final String? initialArrivalPeriod;
   final int? initialArrivalHour;
   final int? initialArrivalMinute;
+  final DateTime? initialArrivalDate;
   final Duration? initialPrepTime;
 
   const TimeSettingPage({
@@ -17,6 +20,7 @@ class TimeSettingPage extends StatefulWidget {
     this.initialArrivalPeriod,
     this.initialArrivalHour,
     this.initialArrivalMinute,
+    this.initialArrivalDate,
     this.initialPrepTime,
   }) : super(key: key);
 
@@ -29,6 +33,7 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
   late String arrivalPeriod;
   late int arrivalHour;
   late int arrivalMinute;
+  late DateTime arrivalDate;
 
   // 준비 시간 (24시간 형식)
   late int prepHour;
@@ -39,6 +44,9 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
   Duration? travelTime;
   DateTime? alarmTime;
   bool isLoadingTravelTime = false;
+
+  // EventService 인스턴스
+  final EventService _eventService = EventService();
 
   final List<String> periodList = ['오전', '오후'];
   final List<int> hourList = List.generate(12, (i) => i + 1);
@@ -53,6 +61,10 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
     arrivalPeriod = widget.initialArrivalPeriod ?? '오전';
     arrivalHour = widget.initialArrivalHour ?? 8;
     arrivalMinute = widget.initialArrivalMinute ?? 0;
+
+    // 도착날짜 초기값 설정 (기본값: 오늘)
+    final now = DateTime.now();
+    arrivalDate = widget.initialArrivalDate ?? DateTime(now.year, now.month, now.day);
 
     // 준비시간 초기값 설정 (24시간 형식)
     if (widget.initialPrepTime != null) {
@@ -86,7 +98,6 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        // 백엔드에서 분 단위로 받는다고 가정
         int travelMinutes = data['travelTimeMinutes'] ?? 30;
 
         setState(() {
@@ -95,7 +106,6 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
           isLoadingTravelTime = false;
         });
       } else {
-        // 기본값 설정 (30분)
         setState(() {
           travelTime = const Duration(minutes: 30);
           _calculateAlarmTime();
@@ -104,7 +114,6 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
         print('이동소요시간 조회 실패: ${response.statusCode}');
       }
     } catch (e) {
-      // 기본값 설정 (30분)
       setState(() {
         travelTime = const Duration(minutes: 30);
         _calculateAlarmTime();
@@ -118,13 +127,12 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
   void _calculateAlarmTime() {
     if (travelTime == null) return;
 
-    // 도착시간을 DateTime으로 변환 (오늘 날짜 기준)
-    DateTime today = DateTime.now();
+    // 도착시간을 DateTime으로 변환 (선택된 날짜 기준)
     int hour24 = _convertTo24Hour(arrivalPeriod, arrivalHour);
     DateTime arrivalDateTime = DateTime(
-      today.year,
-      today.month,
-      today.day,
+      arrivalDate.year,
+      arrivalDate.month,
+      arrivalDate.day,
       hour24,
       arrivalMinute,
     );
@@ -143,6 +151,54 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
     _calculateAlarmTime();
   }
 
+  // 날짜 선택 다이얼로그
+  Future<void> _selectDate(BuildContext context) async {
+    try {
+      final DateTime now = DateTime.now();
+      final DateTime today = DateTime(now.year, now.month, now.day);
+
+      final DateTime? picked = await showDatePicker(
+        context: context,
+        initialDate: arrivalDate.isBefore(today) ? today : arrivalDate,
+        firstDate: today,
+        lastDate: DateTime(now.year + 1, now.month, now.day),
+        builder: (BuildContext context, Widget? child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: ColorScheme.light(
+                primary: const Color(0xFF334066),
+                onPrimary: Colors.white,
+                surface: Colors.white,
+                onSurface: const Color(0xFF334066),
+                surfaceVariant: Colors.grey.shade100,
+                onSurfaceVariant: Colors.grey.shade600,
+              ),
+              dialogBackgroundColor: Colors.white,
+            ),
+            child: child ?? Container(),
+          );
+        },
+      );
+
+      if (picked != null && picked != arrivalDate) {
+        setState(() {
+          arrivalDate = picked;
+        });
+        _onTimeChanged();
+      }
+    } catch (e) {
+      print('날짜 선택 오류: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('날짜 선택 중 오류가 발생했습니다.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   // 백엔드 서버에 도착시간 데이터 전송
   Future<void> _sendArrivalTimeToServer() async {
     try {
@@ -154,6 +210,9 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
           'Content-Type': 'application/json; charset=UTF-8',
         },
         body: jsonEncode(<String, dynamic>{
+          'year': arrivalDate.year,
+          'month': arrivalDate.month,
+          'day': arrivalDate.day,
           'hour': hour24,
           'minute': arrivalMinute,
         }),
@@ -190,6 +249,36 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
           ),
         );
       }
+    }
+  }
+
+  // 캘린더에 알람 일정 저장
+  void _saveAlarmToCalendar() {
+    if (alarmTime == null) return;
+
+    // 도착 시간 포맷팅
+    final arrivalTimeString = DateFormat('HH:mm').format(DateTime(
+      arrivalDate.year,
+      arrivalDate.month,
+      arrivalDate.day,
+      _convertTo24Hour(arrivalPeriod, arrivalHour),
+      arrivalMinute,
+    ));
+
+    // EventService를 통해 알람 일정 추가
+    _eventService.addAlarmEvent(alarmTime!, arrivalDate, arrivalTimeString);
+
+    print('알람 일정이 캘린더에 저장되었습니다:');
+    print('알람 시간: ${DateFormat('yyyy-MM-dd HH:mm').format(alarmTime!)}');
+    print('도착 시간: ${DateFormat('yyyy-MM-dd').format(arrivalDate)} $arrivalTimeString');
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('알람이 캘린더에 저장되었습니다.'),
+          backgroundColor: Colors.green,
+        ),
+      );
     }
   }
 
@@ -239,6 +328,25 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
     return true;
   }
 
+  // 날짜를 한국어 형식으로 포맷팅
+  String _formatDate(DateTime date) {
+    final weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+    final weekday = weekdays[date.weekday % 7];
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final targetDate = DateTime(date.year, date.month, date.day);
+
+    if (targetDate == today) {
+      return '오늘 (${date.month}/${date.day})';
+    } else if (targetDate == tomorrow) {
+      return '내일 (${date.month}/${date.day})';
+    } else {
+      return '${date.month}/${date.day} ($weekday)';
+    }
+  }
+
   // 시간을 AM/PM 형식으로 포맷팅
   String _formatTime(DateTime dateTime) {
     int hour = dateTime.hour;
@@ -247,6 +355,11 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
     int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
 
     return '$period ${displayHour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+  }
+
+  // 날짜와 시간을 함께 포맷팅
+  String _formatDateTime(DateTime dateTime) {
+    return '${_formatDate(dateTime)} ${_formatTime(dateTime)}';
   }
 
   @override
@@ -275,9 +388,11 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
             // 도착시간설정 카드
             _arrivalTimeCard(
               title: '도착시간설정',
+              date: arrivalDate,
               period: arrivalPeriod,
               hour: arrivalHour,
               minute: arrivalMinute,
+              onDateTap: () => _selectDate(context),
               onPeriodChanged: (val) {
                 setState(() => arrivalPeriod = val);
                 _onTimeChanged();
@@ -337,14 +452,17 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
                     // 도착시간 서버로 전송
                     await _sendArrivalTimeToServer();
 
+                    // 캘린더에 알람 일정 저장
+                    _saveAlarmToCalendar();
+
                     // 준비시간 계산 및 홈페이지로 전달
                     if (widget.onPrepTimeSet != null) {
                       widget.onPrepTimeSet!(_calculatePrepTime());
                     }
 
-                    // 도착시간도 홈페이지로 전달
+                    // 도착시간과 날짜를 홈페이지로 전달
                     if (widget.onArrivalTimeSet != null) {
-                      widget.onArrivalTimeSet!(arrivalPeriod, arrivalHour, arrivalMinute);
+                      widget.onArrivalTimeSet!(arrivalPeriod, arrivalHour, arrivalMinute, arrivalDate);
                     }
 
                     // 로딩 인디케이터 제거
@@ -384,7 +502,7 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
     );
   }
 
-  // 알람예정시간 표시 카드
+  // 알람예정시간 표시 카드 (날짜 포함)
   Widget _alarmTimeCard() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
@@ -447,13 +565,26 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
                     ],
                   )
                 else if (alarmTime != null)
-                  Text(
-                    _formatTime(alarmTime!),
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _formatDate(alarmTime!),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      Text(
+                        _formatTime(alarmTime!),
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
                   )
                 else
                   const Text(
@@ -493,12 +624,14 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
     );
   }
 
-  // 도착시간 카드 (오전/오후 포함)
+  // 도착시간 카드 (날짜 선택 추가)
   Widget _arrivalTimeCard({
     required String title,
+    required DateTime date,
     required String period,
     required int hour,
     required int minute,
+    required VoidCallback onDateTap,
     required ValueChanged<String> onPeriodChanged,
     required ValueChanged<int> onHourChanged,
     required ValueChanged<int> onMinuteChanged,
@@ -528,6 +661,42 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
             ),
           ),
           const SizedBox(height: 18),
+
+          // 날짜 선택 버튼
+          GestureDetector(
+            onTap: onDateTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3EFEE),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF334066).withOpacity(0.2)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.calendar_today,
+                    size: 18,
+                    color: Color(0xFF334066),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    _formatDate(date),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF334066),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          // 시간 선택
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
