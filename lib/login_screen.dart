@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_web_auth/flutter_web_auth.dart';
+import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
@@ -68,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
     ).toString();
 
     // 7) 외부 브라우저에서 인증 → deep link 수신
-    final result = await FlutterWebAuth.authenticate(
+    final result = await FlutterWebAuth2.authenticate(
       url: authUrl,
       callbackUrlScheme: callbackScheme,
     );
