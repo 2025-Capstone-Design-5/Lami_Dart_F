@@ -20,8 +20,7 @@ dependencies:
   permission_handler: ^11.1.0  # 권한 관리용
   wakelock_plus: ^1.2.1       # 화면 켜짐 유지용
   flutter_local_notifications: ^17.2.2  # 로컬 알림용
-  uni_links: ^0.5.1  # 딥 링크 수신
-  flutter_web_auth: ^0.3.1  # OAuth 인증
+  flutter_web_auth_2: ^4.1.0  # OAuth 인증 (migrated)
   crypto: ^3.0.1  # PKCE 생성
   flutter_dotenv: ^5.0.2  # 환경변수 관리
 
