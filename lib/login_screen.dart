@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_web_auth/flutter_web_auth.dart';
+import 'dart:convert';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
+import 'package:http/http.dart' as http;
 import 'main.dart'; // MainScreen으로 이동하기 위한 import
 import 'signup_screen.dart'; // 회원가입 화면으로 이동하기 위한 import
 import 'mypage.dart'; // MyPage import 추가
+import 'package:flutter/foundation.dart';  // for kIsWeb
+import 'dart:io' show Platform;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class LoginScreen extends StatefulWidget {
   // 회원가입 정보를 저장할 변수 추가
@@ -51,6 +59,97 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     }
+  }
+
+  // 1) PKCE code_verifier 생성
+  String _genVerifier() {
+    final rand = Random.secure();
+    final bytes = List<int>.generate(64, (_) => rand.nextInt(256));
+    return base64UrlEncode(bytes).replaceAll('=', '');
+  }
+
+  // 2) code_challenge 생성
+  String _genChallenge(String verifier) {
+    final digest = sha256.convert(utf8.encode(verifier)).bytes;
+    return base64UrlEncode(digest).replaceAll('=', '');
+  }
+
+  // 3) CSRF state 생성
+  String _genState() {
+    final rand = Random.secure();
+    final bytes = List<int>.generate(16, (_) => rand.nextInt(256));
+    return base64UrlEncode(bytes).replaceAll('=', '');
+  }
+
+  Future<void> _authenticateWithGoogle() async {
+    final codeVerifier = _genVerifier();
+    final codeChallenge = _genChallenge(codeVerifier);
+    final state = _genState();
+
+    // 4) 플랫폼별 Client ID 설정 (Android, iOS용 별도 관리)
+    final androidClientId = dotenv.env['ANDROID_CLIENT_ID']!;
+    final iosClientId = dotenv.env['IOS_CLIENT_ID']!;
+    final clientId = Platform.isAndroid ? androidClientId : iosClientId;
+    final redirectUri = dotenv.env['REDIRECT_URI']!;
+    final callbackScheme = redirectUri.split(':').first;
+
+    // 6) 인증 URL 생성
+    final authUrl = Uri.https(
+      'accounts.google.com',
+      '/o/oauth2/v2/auth',
+      {
+        'response_type': 'code',
+        'client_id': clientId,
+        'redirect_uri': redirectUri,
+        'scope': 'openid email profile https://www.googleapis.com/auth/calendar',
+        'state': state,
+        'code_challenge': codeChallenge,
+        'code_challenge_method': 'S256',
+        'access_type': 'offline',
+        'prompt': 'consent',
+      },
+    ).toString();
+
+    // 7) 외부 브라우저에서 인증 → deep link 수신
+    final result = await FlutterWebAuth.authenticate(
+      url: authUrl,
+      callbackUrlScheme: callbackScheme,
+    );
+    final uri = Uri.parse(result);
+    // CSRF 검증
+    if (uri.queryParameters['state'] != state) {
+      throw Exception('Invalid state');
+    }
+    final code = uri.queryParameters['code']!;
+    
+    // 8) 서버로 code+codeVerifier 전송
+    final serverBaseUrl = dotenv.env['SERVER_BASE_URL']!;
+    final resp = await http.post(
+      Uri.parse('$serverBaseUrl/auth/google/code'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'code': code,
+        'codeVerifier': codeVerifier,
+        'platform': Platform.isAndroid ? 'android' : 'ios',
+      }),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception('Token exchange failed: ${resp.body}');
+    }
+    final data = jsonDecode(resp.body)['data'];
+    // TODO: 받은 data['access_token'], data['refresh_token'], data['id_token'] 저장 및 사용자 처리
+
+    // 로그인 성공 후 홈 화면으로 이동 (이전 스택 제거)
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => MainScreen(
+          userName: data['idToken']['name'] ?? '',
+          userEmail: data['idToken']['email'] ?? '',
+          initialIndex: 0,
+        ),
+      ),
+      (route) => false,
+    );
   }
 
   @override
@@ -223,6 +322,40 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 20),
+
+                  // 구글 로그인 버튼 (오버플로우 방지 위해 Row + Flexible 사용)
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _authenticateWithGoogle,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.login,
+                            size: 24,
+                            color: Colors.red,
+                          ),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              'Google로 로그인',
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // pubspec.yaml에 assets 수정 후에는 전체 재시작(Hot Restart 또는 flutter run) 필요
                   const SizedBox(height: 20),
 
                   // 회원가입 링크

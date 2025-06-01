@@ -20,6 +20,10 @@ dependencies:
   permission_handler: ^11.1.0  # 권한 관리용
   wakelock_plus: ^1.2.1       # 화면 켜짐 유지용
   flutter_local_notifications: ^17.2.2  # 로컬 알림용
+  uni_links: ^0.5.1  # 딥 링크 수신
+  flutter_web_auth: ^0.3.1  # OAuth 인증
+  crypto: ^3.0.1  # PKCE 생성
+  flutter_dotenv: ^5.0.2  # 환경변수 관리
 
 dev_dependencies:
   flutter_test:
@@ -29,7 +33,9 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # assets 부분 수정 - assets 폴더만 등록 (폴더가 생성되어 있어야 함)
+  # assets 부분 수정 - assets 폴더와 .env 등록 (폴더 및 .env 파일이 생성되어 있어야 함)
   assets:
+    - .env
     - assets/images/
     - assets/sounds/  # 알람 소리 파일용 (선택사항)
+    - assets/signin-assets/  # 로그인 아이콘 등 추가 자산
