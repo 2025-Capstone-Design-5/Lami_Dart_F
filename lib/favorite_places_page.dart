@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'search_history_service.dart';
+import 'arrivemappage.dart';
 
 class FavoritePlacesPage extends StatefulWidget {
   const FavoritePlacesPage({Key? key}) : super(key: key);
@@ -9,22 +10,15 @@ class FavoritePlacesPage extends StatefulWidget {
 }
 
 class _FavoritePlacesPageState extends State<FavoritePlacesPage> {
-  // 검색 기록 서비스
   final SearchHistoryService _searchHistoryService = SearchHistoryService();
   
-  // 자주 검색한 장소 목록
-  List<Map<String, dynamic>> frequentPlaces = [];
-  
-  // 선택된 교통수단 필터 (null: 모든 교통수단, 0: 지하철, 1: 버스, 2: 승용차)
-  int? _selectedTransportationFilter;
+  // 자주 사용한 경로 목록
+  List<Map<String, dynamic>> frequentRoutes = [];
   
   @override
   void initState() {
     super.initState();
-    // 데이터 로드
     _loadData();
-    
-    // 검색 기록 변경 시 UI 업데이트
     _searchHistoryService.addListener(_loadData);
   }
   
@@ -34,20 +28,8 @@ class _FavoritePlacesPageState extends State<FavoritePlacesPage> {
     super.dispose();
   }
   
-  // 데이터 로드
   void _loadData() {
-    // 선택된 교통수단에 따라 자주 찾는 장소 필터링 (최대 5개)
-    if (_selectedTransportationFilter == null) {
-      // '전체' 선택 시 모든 교통수단의 자주 찾는 장소 표시
-      frequentPlaces = _searchHistoryService.getMostSearchedPlaces(limit: 5);
-    } else {
-      // 특정 교통수단의 자주 찾는 장소만 표시
-      frequentPlaces = _searchHistoryService.getMostSearchedPlaces(
-        limit: 5,
-        transportationType: _selectedTransportationFilter,
-      );
-    }
-    
+    frequentRoutes = _searchHistoryService.getRouteHistory(limit: 10);
     setState(() {});
   }
 
@@ -55,7 +37,7 @@ class _FavoritePlacesPageState extends State<FavoritePlacesPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('즐겨찾는 장소'),
+        title: const Text('즐겨찾는 경로'),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0.5,
@@ -65,6 +47,14 @@ class _FavoritePlacesPageState extends State<FavoritePlacesPage> {
           fontSize: 20,
         ),
         iconTheme: const IconThemeData(color: Colors.black),
+        actions: [
+          if (frequentRoutes.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_sweep),
+              onPressed: _showClearAllDialog,
+              tooltip: '모든 기록 삭제',
+            ),
+        ],
       ),
       backgroundColor: const Color(0xFFF3EFEE),
       body: Padding(
@@ -72,204 +62,36 @@ class _FavoritePlacesPageState extends State<FavoritePlacesPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 교통수단 필터 UI
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  // 전체 항목
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedTransportationFilter = null;
-                        _loadData();
-                      });
-                    },
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.all_inclusive,
-                          size: 36,
-                          color: _selectedTransportationFilter == null
-                              ? Colors.purple
-                              : Colors.grey,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '전체',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: _selectedTransportationFilter == null
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                        ),
-                      ],
-                    ),
+            Row(
+              children: [
+                const Icon(Icons.route, color: Colors.blue, size: 24),
+                const SizedBox(width: 8),
+                const Text(
+                  '자주 사용한 경로',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
                   ),
-                  // 지하철 항목
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedTransportationFilter = 0;
-                        _loadData();
-                      });
-                    },
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.train,
-                          size: 36,
-                          color: _selectedTransportationFilter == 0
-                              ? Colors.blue
-                              : Colors.grey,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '지하철',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: _selectedTransportationFilter == 0
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // 버스 항목
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedTransportationFilter = 1;
-                        _loadData();
-                      });
-                    },
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.directions_bus,
-                          size: 36,
-                          color: _selectedTransportationFilter == 1
-                              ? Colors.green
-                              : Colors.grey,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '버스',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: _selectedTransportationFilter == 1
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // 승용차 항목
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedTransportationFilter = 2;
-                        _loadData();
-                      });
-                    },
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.directions_car,
-                          size: 36,
-                          color: _selectedTransportationFilter == 2
-                              ? Colors.orange
-                              : Colors.grey,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '승용차',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: _selectedTransportationFilter == 2
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            
-            const Text(
-              '자주 검색한 장소',
+            const SizedBox(height: 8),
+            Text(
+              '경로를 선택하면 출발지와 도착지가 자동으로 설정됩니다',
               style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: Colors.grey[600],
               ),
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: frequentPlaces.isEmpty
-                  ? Center(
-                      child: Text(
-                        _selectedTransportationFilter == null
-                            ? '검색 기록이 없습니다.'
-                            : '${_getTransportationName(_selectedTransportationFilter!)} 검색 기록이 없습니다.',
-                        style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                      ),
-                    )
+              child: frequentRoutes.isEmpty
+                  ? _buildEmptyState()
                   : ListView.builder(
-                      itemCount: frequentPlaces.length,
+                      itemCount: frequentRoutes.length,
                       itemBuilder: (context, index) {
-                        final place = frequentPlaces[index];
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: ListTile(
-                            leading: Icon(
-                              _getTransportationIcon(place['transportationType'] ?? 0),
-                              color: _getTransportationColor(place['transportationType'] ?? 0),
-                              size: 32,
-                            ),
-                            title: Text(
-                              place['name'],
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const SizedBox(height: 4),
-                                Text(place['address']),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '방문 횟수: ${place['count']}회',
-                                  style: TextStyle(color: Colors.blue.shade700),
-                                ),
-                                Text(
-                                  '교통수단: ${_getTransportationName(place['transportationType'] ?? 0)}',
-                                  style: TextStyle(
-                                    color: _getTransportationColor(place['transportationType'] ?? 0),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.map, color: Colors.blue),
-                              onPressed: () {
-                                // 지도 페이지로 이동하는 기능 구현
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('${place['name']} 지도 보기')),
-                                );
-                              },
-                            ),
-                            isThreeLine: true,
-                          ),
-                        );
+                        final route = frequentRoutes[index];
+                        return _buildRouteCard(route, index);
                       },
                     ),
             ),
@@ -279,45 +101,334 @@ class _FavoritePlacesPageState extends State<FavoritePlacesPage> {
     );
   }
   
-  // 교통수단 아이콘 가져오기
-  IconData _getTransportationIcon(int type) {
-    switch (type) {
-      case 0:
-        return Icons.train;
-      case 1:
-        return Icons.directions_bus;
-      case 2:
-        return Icons.directions_car;
-      default:
-        return Icons.train;
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.route,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '저장된 경로가 없습니다',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '출발지와 도착지를 검색하면\n자주 사용한 경로가 여기에 표시됩니다',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[500],
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ArriveMapPage()),
+              );
+            },
+            icon: const Icon(Icons.search),
+            label: const Text('경로 검색하기'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildRouteCard(Map<String, dynamic> route, int index) {
+    final DateTime lastUsed = DateTime.fromMillisecondsSinceEpoch(route['lastUsed']);
+    final String timeAgo = _getTimeAgo(lastUsed);
+    
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _selectRoute(route),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${index + 1}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue[700],
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'delete') {
+                        _deleteRoute(route);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete, color: Colors.red, size: 20),
+                            SizedBox(width: 8),
+                            Text('삭제'),
+                          ],
+                        ),
+                      ),
+                    ],
+                    child: Icon(Icons.more_vert, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              
+              // 출발지
+              Row(
+                children: [
+                  const Icon(Icons.my_location, color: Colors.blue, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          route['departureName'],
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          route['departureAddress'],
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              
+              // 화살표
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 28),
+                    Icon(Icons.arrow_downward, color: Colors.grey[400], size: 16),
+                  ],
+                ),
+              ),
+              
+              // 도착지
+              Row(
+                children: [
+                  const Icon(Icons.location_on, color: Colors.red, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          route['destinationName'],
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          route['destinationAddress'],
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 12),
+              
+              // 통계 정보
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green[50],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.repeat, size: 14, color: Colors.green[700]),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${route['count']}회',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.green[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[50],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.access_time, size: 14, color: Colors.orange[700]),
+                        const SizedBox(width: 4),
+                        Text(
+                          timeAgo,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.orange[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  
+  String _getTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+    
+    if (difference.inDays > 0) {
+      return '${difference.inDays}일 전';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}시간 전';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}분 전';
+    } else {
+      return '방금 전';
     }
   }
   
-  // 교통수단 색상 가져오기
-  Color _getTransportationColor(int type) {
-    switch (type) {
-      case 0:
-        return Colors.blue;
-      case 1:
-        return Colors.green;
-      case 2:
-        return Colors.orange;
-      default:
-        return Colors.blue;
-    }
+  void _selectRoute(Map<String, dynamic> route) {
+    // 경로 선택 시 ArriveMapPage로 이동하면서 출발지와 도착지 정보 전달
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ArriveMapPage(
+          initialDeparture: route['departureName'],
+          initialDepartureAddress: route['departureAddress'],
+          initialDestination: route['destinationName'],
+          initialDestinationAddress: route['destinationAddress'],
+        ),
+      ),
+    );
   }
   
-  // 교통수단 이름 가져오기
-  String _getTransportationName(int type) {
-    switch (type) {
-      case 0:
-        return '지하철';
-      case 1:
-        return '버스';
-      case 2:
-        return '승용차';
-      default:
-        return '지하철';
-    }
+  void _deleteRoute(Map<String, dynamic> route) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('경로 삭제'),
+        content: Text(
+          '"${route['departureName']} → ${route['destinationName']}" 경로를 삭제하시겠습니까?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () {
+              _searchHistoryService.removeRouteHistory(
+                route['departureName'],
+                route['destinationName'],
+              );
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('경로가 삭제되었습니다')),
+              );
+            },
+            child: const Text('삭제', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showClearAllDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('모든 기록 삭제'),
+        content: const Text('모든 경로 기록을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () {
+              _searchHistoryService.clearAllRouteHistory();
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('모든 경로 기록이 삭제되었습니다')),
+              );
+            },
+            child: const Text('삭제', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
   }
 }

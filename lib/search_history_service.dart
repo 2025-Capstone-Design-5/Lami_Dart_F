@@ -1,6 +1,6 @@
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SearchHistoryService extends ChangeNotifier {
   // 싱글톤 패턴 구현
@@ -8,79 +8,38 @@ class SearchHistoryService extends ChangeNotifier {
   factory SearchHistoryService() => _instance;
   SearchHistoryService._internal();
 
-  // 교통수단별 검색 기록 저장 맵 (0: 지하철, 1: 버스, 2: 승용차)
-  Map<int, Map<String, Map<String, dynamic>>> _searchHistoryByTransportation = {
-    0: {}, // 지하철
-    1: {}, // 버스
-    2: {}, // 승용차
-  };
+  // 목적지 검색 기록 저장 맵 (교통수단 정보 제거)
+  Map<String, Map<String, dynamic>> _searchHistory = {};
   
-  // 교통수단별 사용 횟수
-  Map<int, int> _transportationUsage = {0: 0, 1: 0, 2: 0}; // 0: 지하철, 1: 버스, 2: 승용차
+  // 출발지-도착지 쌍 저장
+  final List<Map<String, dynamic>> _routeHistory = [];
+  
+  bool _isLoaded = false;
 
-  // 가장 많이 사용한 교통수단 가져오기
-  int getMostUsedTransportation() {
-    int maxUsage = 0;
-    int mostUsed = 0;
+  // 검색 기록 추가 - 교통수단 정보 제거
+  void addSearchHistory(String placeName, String address) {
+    print('검색 기록 추가: $placeName');
     
-    _transportationUsage.forEach((key, value) {
-      if (value > maxUsage) {
-        maxUsage = value;
-        mostUsed = key;
-      }
-    });
-    
-    return mostUsed;
-  }
-
-  // 교통수단 사용 횟수 증가
-  void incrementTransportationUsage(int transportationType) {
-    _transportationUsage[transportationType] = (_transportationUsage[transportationType] ?? 0) + 1;
-    _saveTransportationUsage();
-    notifyListeners();
-  }
-
-  // 검색 기록 추가 - 교통수단별로 분리하여 저장
-  void addSearchHistory(String placeName, String address, int transportationType) {
-    // 해당 교통수단의 검색 기록 맵 가져오기
-    var transportationMap = _searchHistoryByTransportation[transportationType]!;
-    
-    print('검색 기록 추가: $placeName, 교통수단: $transportationType');
-    
-    if (transportationMap.containsKey(placeName)) {
-      transportationMap[placeName]!['count'] = (transportationMap[placeName]!['count'] as int) + 1;
-      print('기존 검색 기록 업데이트: $placeName, 횟수: ${transportationMap[placeName]!['count']}');
+    if (_searchHistory.containsKey(placeName)) {
+      _searchHistory[placeName]!['count'] = (_searchHistory[placeName]!['count'] as int) + 1;
+      print('기존 검색 기록 업데이트: $placeName, 횟수: ${_searchHistory[placeName]!['count']}');
     } else {
-      transportationMap[placeName] = {
+      _searchHistory[placeName] = {
         'name': placeName,
         'address': address,
         'count': 1,
-        'transportationType': transportationType,
       };
-      print('새 검색 기록 추가: $placeName, 교통수단: $transportationType');
+      print('새 검색 기록 추가: $placeName');
     }
-    
-    // 교통수단 사용 횟수 증가
-    incrementTransportationUsage(transportationType);
     
     _saveSearchHistory();
     notifyListeners();
   }
 
-  // 검색 기록 삭제 - 특정 교통수단의 특정 장소 삭제
-  void removeSearchHistory(String placeName, {int? transportationType}) {
-    if (transportationType != null) {
-      // 특정 교통수단의 검색 기록에서만 삭제
-      if (_searchHistoryByTransportation[transportationType]!.containsKey(placeName)) {
-        _searchHistoryByTransportation[transportationType]!.remove(placeName);
-      }
-    } else {
-      // 모든 교통수단의 검색 기록에서 삭제
-      for (var type in [0, 1, 2]) {
-        if (_searchHistoryByTransportation[type]!.containsKey(placeName)) {
-          _searchHistoryByTransportation[type]!.remove(placeName);
-        }
-      }
+  // 검색 기록 삭제
+  void removeSearchHistory(String placeName) {
+    if (_searchHistory.containsKey(placeName)) {
+      _searchHistory.remove(placeName);
     }
     
     _saveSearchHistory();
@@ -89,48 +48,19 @@ class SearchHistoryService extends ChangeNotifier {
 
   // 모든 검색 기록 삭제
   void clearAllSearchHistory() {
-    for (var type in [0, 1, 2]) {
-      _searchHistoryByTransportation[type]!.clear();
-    }
+    _searchHistory.clear();
     _saveSearchHistory();
     notifyListeners();
   }
 
-  // 특정 교통수단의 모든 검색 기록 삭제
-  void clearTransportationSearchHistory(int transportationType) {
-    // 특정 교통수단의 검색 기록만 삭제
-    _searchHistoryByTransportation[transportationType]!.clear();
-    _saveSearchHistory();
-    notifyListeners();
-  }
-
-  // 모든 교통수단의 검색 기록 가져오기
+  // 모든 검색 기록 가져오기
   List<Map<String, dynamic>> getAllSearchHistory() {
-    List<Map<String, dynamic>> allHistory = [];
-    
-    for (var type in [0, 1, 2]) {
-      allHistory.addAll(_searchHistoryByTransportation[type]!.values.toList());
-    }
-    
-    return allHistory;
+    return _searchHistory.values.toList();
   }
 
-  // 특정 교통수단의 검색 기록 가져오기
-  List<Map<String, dynamic>> getSearchHistoryByTransportation(int transportationType) {
-    return _searchHistoryByTransportation[transportationType]!.values.toList();
-  }
-
-  // 가장 많이 검색한 장소 가져오기 (교통수단별 필터링 옵션 추가)
-  List<Map<String, dynamic>> getMostSearchedPlaces({int limit = 5, int? transportationType}) {
-    List<Map<String, dynamic>> places = [];
-    
-    if (transportationType != null) {
-      // 특정 교통수단의 검색 기록만 가져오기
-      places = _searchHistoryByTransportation[transportationType]!.values.toList();
-    } else {
-      // 모든 교통수단의 검색 기록 가져오기
-      places = getAllSearchHistory();
-    }
+  // 가장 많이 검색한 장소 가져오기
+  List<Map<String, dynamic>> getMostSearchedPlaces({int limit = 5}) {
+    List<Map<String, dynamic>> places = _searchHistory.values.toList();
     
     // 검색 횟수에 따라 정렬
     places.sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
@@ -143,60 +73,131 @@ class SearchHistoryService extends ChangeNotifier {
   Future<void> _saveSearchHistory() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
-      // 각 교통수단별 검색 기록을 JSON으로 변환하여 저장
-      for (var type in [0, 1, 2]) {
-        final String historyJson = jsonEncode(_searchHistoryByTransportation[type]);
-        await prefs.setString('search_history_$type', historyJson);
-      }
-      
-      print('검색 기록 저장 성공 (교통수단별)');
+      final String historyJson = jsonEncode(_searchHistory);
+      await prefs.setString('search_history', historyJson);
+      print('검색 기록 저장 성공');
     } catch (e) {
       print('검색 기록 저장 오류: $e');
     }
   }
 
-  // 교통수단 사용 횟수 저장
-  Future<void> _saveTransportationUsage() async {
+  // 검색 기록 로드
+  Future<void> _loadSearchHistory() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final String usageJson = jsonEncode(_transportationUsage.map((key, value) => 
-        MapEntry(key.toString(), value)));
-      await prefs.setString('transportation_usage', usageJson);
-      print('교통수단 사용 횟수 저장 성공: $_transportationUsage');
+      final String? historyJson = prefs.getString('search_history');
+      
+      if (historyJson != null) {
+        final Map<String, dynamic> decodedMap = jsonDecode(historyJson);
+        _searchHistory = Map.from(decodedMap.map((key, value) => 
+          MapEntry(key, Map<String, dynamic>.from(value))));
+        print('검색 기록 로드 성공: ${_searchHistory.length}개 항목');
+      }
     } catch (e) {
-      print('교통수단 사용 횟수 저장 오류: $e');
+      print('검색 기록 로드 오류: $e');
     }
   }
 
-  // 데이터 로드
-  Future<void> loadData() async {
+  // 출발지-도착지 쌍 추가
+  Future<void> addRouteHistory({
+    required String departureName,
+    required String departureAddress,
+    required String destinationName,
+    required String destinationAddress,
+  }) async {
+    // 동일한 경로가 있는지 확인
+    final existingIndex = _routeHistory.indexWhere((route) => 
+      route['departureName'] == departureName && 
+      route['destinationName'] == destinationName
+    );
+    
+    if (existingIndex != -1) {
+      // 기존 경로가 있으면 카운트 증가
+      _routeHistory[existingIndex]['count'] = (_routeHistory[existingIndex]['count'] ?? 0) + 1;
+      _routeHistory[existingIndex]['lastUsed'] = DateTime.now().millisecondsSinceEpoch;
+    } else {
+      // 새로운 경로 추가
+      _routeHistory.add({
+        'departureName': departureName,
+        'departureAddress': departureAddress,
+        'destinationName': destinationName,
+        'destinationAddress': destinationAddress,
+        'count': 1,
+        'lastUsed': DateTime.now().millisecondsSinceEpoch,
+      });
+    }
+    
+    await _saveRouteHistory();
+    notifyListeners();
+  }
+  
+  // 경로 기록 가져오기
+  List<Map<String, dynamic>> getRouteHistory({int limit = 10}) {
+    final routes = List<Map<String, dynamic>>.from(_routeHistory);
+    
+    // 사용 횟수와 최근 사용 시간을 기준으로 정렬
+    routes.sort((a, b) {
+      final countCompare = (b['count'] as int).compareTo(a['count'] as int);
+      if (countCompare != 0) return countCompare;
+      return (b['lastUsed'] as int).compareTo(a['lastUsed'] as int);
+    });
+    
+    return routes.take(limit).toList();
+  }
+  
+  // 특정 경로 삭제
+  Future<void> removeRouteHistory(String departureName, String destinationName) async {
+    _routeHistory.removeWhere((route) => 
+      route['departureName'] == departureName && 
+      route['destinationName'] == destinationName
+    );
+    await _saveRouteHistory();
+    notifyListeners();
+  }
+  
+  // 모든 경로 기록 삭제
+  Future<void> clearAllRouteHistory() async {
+    _routeHistory.clear();
+    await _saveRouteHistory();
+    notifyListeners();
+  }
+  
+  // 경로 기록 저장
+  Future<void> _saveRouteHistory() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
-      // 각 교통수단별 검색 기록 로드
-      for (var type in [0, 1, 2]) {
-        final String? historyJson = prefs.getString('search_history_$type');
-        if (historyJson != null) {
-          final Map<String, dynamic> decodedMap = jsonDecode(historyJson);
-          _searchHistoryByTransportation[type] = Map.from(decodedMap.map((key, value) => 
-            MapEntry(key, Map<String, dynamic>.from(value))));
-          print('교통수단 $type 검색 기록 로드 성공: ${_searchHistoryByTransportation[type]!.length}개 항목');
-        }
-      }
-      
-      // 교통수단 사용 횟수 로드
-      final String? usageJson = prefs.getString('transportation_usage');
-      if (usageJson != null) {
-        final Map<String, dynamic> decodedMap = jsonDecode(usageJson);
-        _transportationUsage = Map.from(decodedMap.map((key, value) => 
-          MapEntry(int.parse(key), value as int)));
-        print('교통수단 사용 횟수 로드 성공: $_transportationUsage');
-      }
-      
-      notifyListeners();
+      final String routeHistoryJson = jsonEncode(_routeHistory);
+      await prefs.setString('route_history', routeHistoryJson);
+      print('경로 기록 저장 성공');
     } catch (e) {
-      print('데이터 로드 오류: $e');
+      print('경로 기록 저장 오류: $e');
     }
+  }
+  
+  // 경로 기록 로드
+  Future<void> _loadRouteHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? routeHistoryJson = prefs.getString('route_history');
+      
+      if (routeHistoryJson != null) {
+        final List<dynamic> routeList = jsonDecode(routeHistoryJson);
+        _routeHistory.clear();
+        _routeHistory.addAll(routeList.cast<Map<String, dynamic>>());
+        print('경로 기록 로드 성공: ${_routeHistory.length}개 항목');
+      }
+    } catch (e) {
+      print('경로 기록 로드 오류: $e');
+    }
+  }
+  
+  // 통합된 데이터 로드 메서드
+  Future<void> loadData() async {
+    if (_isLoaded) return;
+    
+    await _loadSearchHistory();
+    await _loadRouteHistory();
+    _isLoaded = true;
+    notifyListeners();
   }
 }

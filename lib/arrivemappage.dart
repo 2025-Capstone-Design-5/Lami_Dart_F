@@ -3,27 +3,37 @@ import 'main.dart';
 import 'search_history_service.dart';
 
 class ArriveMapPage extends StatefulWidget {
-  const ArriveMapPage({Key? key}) : super(key: key);
+  final String? initialDeparture;
+  final String? initialDepartureAddress;
+  final String? initialDestination;
+  final String? initialDestinationAddress;
+  
+  const ArriveMapPage({
+    Key? key,
+    this.initialDeparture,
+    this.initialDepartureAddress,
+    this.initialDestination,
+    this.initialDestinationAddress,
+  }) : super(key: key);
 
   @override
   State<ArriveMapPage> createState() => _ArriveMapPageState();
 }
 
 class _ArriveMapPageState extends State<ArriveMapPage> {
-  final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _departureController = TextEditingController();
+  final TextEditingController _destinationController = TextEditingController();
+  String? searchedDeparture;
   String? searchedDestination;
-  String? searchedAddress;
+  String? searchedDepartureAddress;
+  String? searchedDestinationAddress;
   bool showSearchResults = false;
-  bool showSearchHistory = false;
+  bool showSearchHistory = true; // 기본적으로 검색 기록 표시
   bool showMap = false;
+  bool isDepartureSearch = true;
   
-  // 검색 기록 서비스
   final SearchHistoryService _searchHistoryService = SearchHistoryService();
-  
-  // 선택된 교통수단 (0: 지하철, 1: 버스, 2: 승용차)
-  int _selectedTransportation = 0;
 
-  // 검색 결과 예시 데이터
   final List<Map<String, String>> allLocations = [
     {'name': '천안역', 'address': '충청남도 천안시 동남구 태조산길 103'},
     {'name': '아산역', 'address': '충청남도 아산시 배방읍 희망로 100'},
@@ -43,6 +53,24 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
     super.initState();
     _loadData();
     _searchHistoryService.addListener(_updateUI);
+    
+    // 초기값 설정
+    if (widget.initialDeparture != null) {
+      searchedDeparture = widget.initialDeparture;
+      searchedDepartureAddress = widget.initialDepartureAddress;
+      _departureController.text = widget.initialDeparture!;
+    }
+    
+    if (widget.initialDestination != null) {
+      searchedDestination = widget.initialDestination;
+      searchedDestinationAddress = widget.initialDestinationAddress;
+      _destinationController.text = widget.initialDestination!;
+    }
+    
+    // 출발지와 도착지가 모두 설정되었으면 지도 표시
+    if (searchedDeparture != null && searchedDestination != null) {
+      showMap = true;
+    }
   }
 
   void _updateUI() {
@@ -51,24 +79,21 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
 
   @override
   void dispose() {
+    _departureController.dispose();
+    _destinationController.dispose();
     _searchHistoryService.removeListener(_updateUI);
     super.dispose();
   }
   
-  // 데이터 로드
   void _loadData() async {
     await _searchHistoryService.loadData();
     if (mounted) {
       setState(() {
-        // 현재 선택된 교통수단에 따라 검색 기록 필터링 (최대 5개)
-        searchHistory = _searchHistoryService.getSearchHistoryByTransportation(_selectedTransportation);
-        // 검색 횟수(count)를 기준으로 내림차순 정렬
+        searchHistory = _searchHistoryService.getAllSearchHistory();
         searchHistory.sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
-        // 최대 5개까지만 표시
         if (searchHistory.length > 5) {
           searchHistory = searchHistory.sublist(0, 5);
         }
-        print('검색 기록 로드됨: ${searchHistory.length}개 항목 (교통수단: $_selectedTransportation)');
       });
     }
   }
@@ -78,7 +103,7 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF3EFEE),
       appBar: AppBar(
-        title: const Text('도착지 검색'),
+        title: const Text('출발지/도착지 검색'),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0.5,
@@ -91,446 +116,550 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
       ),
       body: Column(
         children: [
-          // 교통수단 선택 UI
+          // 검색창 컨테이너
+          Container(
+            margin: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.1),
+                  spreadRadius: 1,
+                  blurRadius: 5,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                // 출발지 검색창
+                _buildSearchField(
+                  controller: _departureController,
+                  hintText: '출발지를 입력하세요',
+                  icon: Icons.my_location,
+                  iconColor: Colors.blue,
+                  isDeparture: true,
+                ),
+                
+                // 교환 버튼
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Row(
+                    children: [
+                      Expanded(child: Container()),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: IconButton(
+                          onPressed: _swapLocations,
+                          icon: const Icon(Icons.swap_vert, color: Colors.grey),
+                          tooltip: '출발지/도착지 교환',
+                        ),
+                      ),
+                      Expanded(child: Container()),
+                    ],
+                  ),
+                ),
+                
+                // 목적지 검색창
+                _buildSearchField(
+                  controller: _destinationController,
+                  hintText: '도착지를 입력하세요',
+                  icon: Icons.location_on,
+                  iconColor: Colors.red,
+                  isDeparture: false,
+                ),
+              ],
+            ),
+          ),
+          
+          // 검색 결과 또는 검색 기록 표시
+          Expanded(
+            child: showSearchResults && searchResults.isNotEmpty
+                ? _buildSearchResults()
+                : _buildSearchHistory(),
+          ),
+          
+          // 경로 정보 표시
+          if (showMap && searchedDeparture != null && searchedDestination != null)
+            _buildRouteInfo(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchField({
+    required TextEditingController controller,
+    required String hintText,
+    required IconData icon,
+    required Color iconColor,
+    required bool isDeparture,
+  }) {
+    return TextField(
+      controller: controller,
+      decoration: InputDecoration(
+        hintText: hintText,
+        prefixIcon: Icon(icon, color: iconColor),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: iconColor, width: 2),
+        ),
+        filled: true,
+        fillColor: Colors.grey[50],
+        suffixIcon: controller.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.clear, color: Colors.grey),
+                onPressed: () => _clearField(isDeparture),
+              )
+            : null,
+      ),
+      onChanged: (value) => _onSearchChanged(value, isDeparture),
+      onSubmitted: (value) => _handleSearchSubmission(value, isDeparture),
+      onTap: () => _onFieldTapped(isDeparture),
+    );
+  }
+
+  Widget _buildSearchResults() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                // 지하철 항목
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedTransportation = 0;
-                      // 교통수단 변경 시 검색 기록 다시 로드
-                      _loadData();
-                    });
-                  },
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.train,
-                        size: 36,
-                        color: _selectedTransportation == 0
-                            ? Colors.blue
-                            : Colors.grey,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '지하철',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: _selectedTransportation == 0
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // 버스 항목
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedTransportation = 1;
-                      // 교통수단 변경 시 검색 기록 다시 로드
-                      _loadData();
-                    });
-                  },
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.directions_bus,
-                        size: 36,
-                        color: _selectedTransportation == 1
-                            ? Colors.green
-                            : Colors.grey,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '버스',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: _selectedTransportation == 1
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // 승용차 항목
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedTransportation = 2;
-                      // 교통수단 변경 시 검색 기록 다시 로드
-                      _loadData();
-                    });
-                  },
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.directions_car,
-                        size: 36,
-                        color: _selectedTransportation == 2
-                            ? Colors.orange
-                            : Colors.grey,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '승용차',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: _selectedTransportation == 2
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          
-          // 검색창
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: '도착지를 검색하세요',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                filled: true,
-                fillColor: Colors.white,
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          setState(() {
-                            _searchController.clear();
-                            showSearchResults = false;
-                            searchResults = [];
-                          });
-                        },
-                      )
-                    : null,
+            child: Text(
+              '검색 결과',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
               ),
-              onChanged: (value) {
-                setState(() {
-                  if (value.isEmpty) {
-                    showSearchResults = false;
-                    searchResults = [];
-                  } else {
-                    showSearchResults = true;
-                    searchResults = allLocations
-                        .where((location) =>
-                            location['name']!.contains(value) ||
-                            location['address']!.contains(value))
-                        .toList();
-                  }
-                });
-              },
-              onSubmitted: (value) {
-                // 검색어 제출 시 검색 기록에 추가
-                if (value.isNotEmpty && searchResults.isNotEmpty) {
-                  final selectedLocation = searchResults.first;
-                  setState(() {
-                    searchedDestination = selectedLocation['name'];
-                    searchedAddress = selectedLocation['address'];
-                    showMap = true;
-                    showSearchResults = false;
-                    
-                    // 검색 기록 저장
-                    _searchHistoryService.addSearchHistory(
-                      searchedDestination!,
-                      searchedAddress!,
-                      _selectedTransportation
-                    );
-                    
-                    // 검색 기록 다시 로드
-                    _loadData();
-                  });
-                  
-                  // 검색 완료 메시지
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('$searchedDestination 검색 완료 (${_getTransportationName(_selectedTransportation)})'),
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
-                } else if (value.isNotEmpty) {
-                  // 검색 결과가 없을 경우 직접 입력한 검색어를 기록
-                  setState(() {
-                    searchedDestination = value;
-                    searchedAddress = '사용자 입력';
-                    showMap = true;
-                    showSearchResults = false;
-                    
-                    // 검색 기록 저장
-                    _searchHistoryService.addSearchHistory(
-                      searchedDestination!,
-                      searchedAddress!,
-                      _selectedTransportation
-                    );
-                    
-                    // 검색 기록 다시 로드
-                    _loadData();
-                  });
-                }
-              },
-              onTap: () {
-                // 검색창을 탭했을 때 검색 기록 표시
-                setState(() {
-                  showSearchHistory = true;
-                  // 검색 기록 다시 로드
-                  _loadData();
-                });
-              },
             ),
           ),
-          
-          // 검색 결과와 검색 기록을 함께 표시하는 영역
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 검색 결과 표시 (검색어가 있을 때만)
-                if (showSearchResults && searchResults.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                      '검색 결과',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+            child: ListView.builder(
+              itemCount: searchResults.length,
+              itemBuilder: (context, index) {
+                final location = searchResults[index];
+                return ListTile(
+                  leading: Icon(
+                    Icons.location_on,
+                    color: isDepartureSearch ? Colors.blue : Colors.red,
                   ),
-                  
-                if (showSearchResults)
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: searchResults.length,
-                      itemBuilder: (context, index) {
-                        return ListTile(
-                          title: Text(searchResults[index]['name']!),
-                          subtitle: Text(searchResults[index]['address']!),
-                          onTap: () {
-                            setState(() {
-                              searchedDestination = searchResults[index]['name'];
-                              searchedAddress = searchResults[index]['address'];
-                              showMap = true;
-                              showSearchResults = false;
-                              
-                              // 검색 기록 저장 - 현재 선택된 교통수단 값 사용
-                              _searchHistoryService.addSearchHistory(
-                                searchedDestination!,
-                                searchedAddress!,
-                                _selectedTransportation
-                              );
-                              _loadData();
-                            });
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('$searchedDestination 검색 완료 (${_getTransportationName(_selectedTransportation)})'),
-                                duration: const Duration(seconds: 2),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
+                  title: Text(
+                    location['name']!,
+                    style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
-                
-                // 검색 기록 표시 (항상 표시)
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '${_getTransportationName(_selectedTransportation)} 검색 기록',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      if (searchHistory.isNotEmpty)
-                        TextButton(
-                          onPressed: () {
-                            // 현재 선택된 교통수단의 검색 기록만 삭제
-                            _searchHistoryService.clearTransportationSearchHistory(_selectedTransportation);
-                            setState(() {
-                              searchHistory = [];
-                            });
-                          },
-                          child: Text('${_getTransportationName(_selectedTransportation)} 기록 삭제'),
-                        ),
-                    ],
+                  subtitle: Text(
+                    location['address']!,
+                    style: TextStyle(color: Colors.grey[600]),
                   ),
-                ),
-                
-                // 검색 기록 목록
-                Expanded(
-                  flex: 2,
-                  child: searchHistory.isNotEmpty
-                    ? ListView.builder(
-                        itemCount: searchHistory.length,
-                        itemBuilder: (context, index) {
-                          final place = searchHistory[index];
-                          return ListTile(
-                            leading: Icon(
-                              _getTransportationIcon(place['transportationType'] ?? 0),
-                              color: _getTransportationColor(place['transportationType'] ?? 0),
-                            ),
-                            title: Text(place['name']),
-                            subtitle: Text(place['address']),
-                            // 검색 기록 삭제 부분만 수정 (약 350줄 근처)
-                            trailing: IconButton(
-                              icon: const Icon(Icons.close, size: 18),
-                              onPressed: () {
-                                // 교통수단 정보를 포함하여 삭제
-                                _searchHistoryService.removeSearchHistory(
-                                  place['name'],
-                                  transportationType: place['transportationType']
-                                );
-                                setState(() {
-                                  searchHistory.removeWhere((item) => 
-                                    item['name'] == place['name'] && 
-                                    item['transportationType'] == place['transportationType']
-                                  );
-                                });
-                              },
-                            ),
-                            onTap: () {
-                              setState(() {
-                                searchedDestination = place['name'];
-                                searchedAddress = place['address'];
-                                _selectedTransportation = place['transportationType'] ?? 0;
-                                showMap = true;
-                                _searchController.text = searchedDestination!;
-                                
-                                // 검색 기록 업데이트
-                                _searchHistoryService.addSearchHistory(
-                                  searchedDestination!,
-                                  searchedAddress!,
-                                  _selectedTransportation
-                                );
-                              });
-                            },
-                          );
-                        },
-                      )
-                    : Center(
-                        child: Text(
-                          '검색 기록이 없습니다.',
-                          style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                        ),
-                      ),
-                ),
-                
-                // 지도 표시 (선택된 장소가 있을 때)
-                if (showMap && searchedDestination != null)
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Container(
-                      padding: const EdgeInsets.all(16.0),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.3),
-                            spreadRadius: 1,
-                            blurRadius: 5,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                _getTransportationIcon(_selectedTransportation),
-                                size: 24,
-                                color: _getTransportationColor(_selectedTransportation),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '${_getTransportationName(_selectedTransportation)} 경로',
-                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '도착지: $searchedDestination',
-                            style: const TextStyle(fontSize: 18),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '주소: $searchedAddress',
-                            style: const TextStyle(fontSize: 14, color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
+                  onTap: () => _selectLocation(location),
+                );
+              },
             ),
           ),
         ],
       ),
     );
   }
-  
-  // 교통수단 아이콘 가져오기
-  IconData _getTransportationIcon(int type) {
-    switch (type) {
-      case 0:
-        return Icons.train;
-      case 1:
-        return Icons.directions_bus;
-      case 2:
-        return Icons.directions_car;
-      default:
-        return Icons.train;
+
+  Widget _buildSearchHistory() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '최근 검색',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                if (searchHistory.isNotEmpty)
+                  TextButton(
+                    onPressed: _clearAllHistory,
+                    child: const Text('전체 삭제'),
+                  ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: searchHistory.isNotEmpty
+                ? ListView.builder(
+                    itemCount: searchHistory.length,
+                    itemBuilder: (context, index) {
+                      final place = searchHistory[index];
+                      return ListTile(
+                        leading: const Icon(
+                          Icons.history,
+                          color: Colors.grey,
+                        ),
+                        title: Text(
+                          place['name'],
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        subtitle: Text(
+                          place['address'],
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+                          onPressed: () => _removeHistoryItem(place),
+                        ),
+                        onTap: () => _selectHistoryItem(place),
+                      );
+                    },
+                  )
+                : Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.history,
+                            size: 48,
+                            color: Colors.grey[400],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            '검색 기록이 없습니다',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRouteInfo() {
+    return Container(
+      margin: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.route,
+                size: 24,
+                color: Colors.green,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                '경로 정보',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildRouteItem(
+            icon: Icons.my_location,
+            iconColor: Colors.blue,
+            title: '출발지',
+            name: searchedDeparture ?? '미선택',
+            address: searchedDepartureAddress ?? '',
+          ),
+          const SizedBox(height: 12),
+          _buildRouteItem(
+            icon: Icons.location_on,
+            iconColor: Colors.red,
+            title: '도착지',
+            name: searchedDestination ?? '미선택',
+            address: searchedDestinationAddress ?? '',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRouteItem({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String name,
+    required String address,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, color: iconColor, size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$title: $name',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              if (address.isNotEmpty)
+                Text(
+                  address,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _onSearchChanged(String value, bool isDeparture) {
+    setState(() {
+      isDepartureSearch = isDeparture;
+      if (value.isEmpty) {
+        showSearchResults = false;
+        showSearchHistory = true;
+        searchResults = [];
+      } else {
+        showSearchResults = true;
+        showSearchHistory = false;
+        searchResults = allLocations
+            .where((location) =>
+                location['name']!.toLowerCase().contains(value.toLowerCase()) ||
+                location['address']!.toLowerCase().contains(value.toLowerCase()))
+            .toList();
+      }
+    });
+  }
+
+  void _onFieldTapped(bool isDeparture) {
+    setState(() {
+      isDepartureSearch = isDeparture;
+      if (!showSearchResults) {
+        showSearchHistory = true;
+        _loadData();
+      }
+    });
+  }
+
+  void _clearField(bool isDeparture) {
+    setState(() {
+      if (isDeparture) {
+        _departureController.clear();
+        searchedDeparture = null;
+        searchedDepartureAddress = null;
+      } else {
+        _destinationController.clear();
+        searchedDestination = null;
+        searchedDestinationAddress = null;
+      }
+      showSearchResults = false;
+      showSearchHistory = true;
+      searchResults = [];
+      _updateMapVisibility();
+    });
+  }
+
+  void _swapLocations() {
+    setState(() {
+      final tempController = _departureController.text;
+      final tempDestination = searchedDeparture;
+      final tempAddress = searchedDepartureAddress;
+      
+      _departureController.text = _destinationController.text;
+      searchedDeparture = searchedDestination;
+      searchedDepartureAddress = searchedDestinationAddress;
+      
+      _destinationController.text = tempController;
+      searchedDestination = tempDestination;
+      searchedDestinationAddress = tempAddress;
+      
+      _updateMapVisibility();
+    });
+  }
+
+  void _selectLocation(Map<String, String> location) {
+    setState(() {
+      if (isDepartureSearch) {
+        searchedDeparture = location['name'];
+        searchedDepartureAddress = location['address'];
+        _departureController.text = searchedDeparture!;
+      } else {
+        searchedDestination = location['name'];
+        searchedDestinationAddress = location['address'];
+        _destinationController.text = searchedDestination!;
+      }
+      showSearchResults = false;
+      showSearchHistory = true;
+      
+      _searchHistoryService.addSearchHistory(
+        location['name']!,
+        location['address']!
+      );
+      _loadData();
+      _updateMapVisibility();
+      
+      // 출발지와 도착지가 모두 설정되었으면 경로 기록 저장
+      if (searchedDeparture != null && searchedDestination != null) {
+        _saveRouteHistory();
+      }
+    });
+    
+    _showSelectionSnackBar(location['name']!);
+  }
+
+  // 경로 기록 저장 메서드 추가
+  void _saveRouteHistory() {
+    if (searchedDeparture != null && 
+        searchedDestination != null && 
+        searchedDepartureAddress != null && 
+        searchedDestinationAddress != null) {
+      _searchHistoryService.addRouteHistory(
+        departureName: searchedDeparture!,
+        departureAddress: searchedDepartureAddress!,
+        destinationName: searchedDestination!,
+        destinationAddress: searchedDestinationAddress!,
+      );
     }
   }
-  
-  // 교통수단 색상 가져오기
-  Color _getTransportationColor(int type) {
-    switch (type) {
-      case 0:
-        return Colors.blue;
-      case 1:
-        return Colors.green;
-      case 2:
-        return Colors.orange;
-      default:
-        return Colors.blue;
-    }
+
+  void _selectHistoryItem(Map<String, dynamic> place) {
+    setState(() {
+      if (isDepartureSearch) {
+        searchedDeparture = place['name'];
+        searchedDepartureAddress = place['address'];
+        _departureController.text = searchedDeparture!;
+      } else {
+        searchedDestination = place['name'];
+        searchedDestinationAddress = place['address'];
+        _destinationController.text = searchedDestination!;
+      }
+      
+      _searchHistoryService.addSearchHistory(
+        place['name'],
+        place['address']
+      );
+      _loadData();
+      _updateMapVisibility();
+    });
   }
-  
-  // 교통수단 이름 가져오기
-  String _getTransportationName(int type) {
-    switch (type) {
-      case 0:
-        return '지하철';
-      case 1:
-        return '버스';
-      case 2:
-        return '승용차';
-      default:
-        return '지하철';
+
+  void _removeHistoryItem(Map<String, dynamic> place) {
+    _searchHistoryService.removeSearchHistory(place['name']);
+    setState(() {
+      searchHistory.removeWhere((item) => item['name'] == place['name']);
+    });
+  }
+
+  void _clearAllHistory() {
+    _searchHistoryService.clearAllSearchHistory();
+    setState(() {
+      searchHistory = [];
+    });
+  }
+
+  void _updateMapVisibility() {
+    showMap = searchedDeparture != null && searchedDestination != null;
+  }
+
+  void _showSelectionSnackBar(String locationName) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '${isDepartureSearch ? "출발지" : "도착지"}: $locationName 선택 완료',
+        ),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _handleSearchSubmission(String value, bool isDeparture) {
+    if (value.isEmpty) return;
+    
+    if (searchResults.isNotEmpty) {
+      _selectLocation(searchResults.first);
+    } else {
+      // 직접 입력된 경우
+      setState(() {
+        if (isDeparture) {
+          searchedDeparture = value;
+          searchedDepartureAddress = '사용자 입력';
+        } else {
+          searchedDestination = value;
+          searchedDestinationAddress = '사용자 입력';
+        }
+        showSearchResults = false;
+        showSearchHistory = true;
+        
+        _searchHistoryService.addSearchHistory(value, '사용자 입력');
+        _loadData();
+        _updateMapVisibility();
+      });
+      
+      _showSelectionSnackBar(value);
     }
   }
 }
