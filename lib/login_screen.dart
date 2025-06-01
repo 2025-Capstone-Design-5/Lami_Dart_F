@@ -324,7 +324,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // 구글 로그인 버튼 (오버플로우 방지 위해 Row + Flexible 사용)
+                  // 구글 로그인 버튼 (통합된 단일 버튼)
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -332,30 +332,63 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: _authenticateWithGoogle,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
-                        foregroundColor: Colors.black,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        foregroundColor: const Color(0xFF1F1F1F),
+                        elevation: 1,
+                        shadowColor: Colors.black26,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          side: const BorderSide(
+                            color: Color(0xFFDADCE0),
+                            width: 1,
+                          ),
+                        ),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.login,
-                            size: 24,
-                            color: Colors.red,
+                          // Google 공식 로고
+                          Container(
+                            width: 18,
+                            height: 18,
+                            margin: const EdgeInsets.only(right: 8),
+                            child: Image.asset(
+                              'assets/images/google_logo.png',
+                              width: 18,
+                              height: 18,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  width: 18,
+                                  height: 18,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(2),
+                                    border: Border.all(color: Colors.grey.shade300),
+                                  ),
+                                  child: const Icon(
+                                    Icons.login,
+                                    size: 14,
+                                    color: Color(0xFF4285F4),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
-                          const SizedBox(width: 8),
-                          const Expanded(
-                            child: Text(
-                              'Google로 로그인',
-                              textAlign: TextAlign.center,
-                              overflow: TextOverflow.ellipsis,
+                          const SizedBox(width: 12),
+                          const Text(
+                            'Google로 로그인',
+                            style: TextStyle(
+                              fontFamily: 'Roboto',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF1F1F1F),
+                              letterSpacing: 0.25,
                             ),
                           ),
                         ],
                       ),
                     ),
                   ),
-                  // pubspec.yaml에 assets 수정 후에는 전체 재시작(Hot Restart 또는 flutter run) 필요
                   const SizedBox(height: 20),
 
                   // 회원가입 링크
