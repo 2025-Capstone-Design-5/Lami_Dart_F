@@ -1,4 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'models/route_response.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:add_2_calendar/add_2_calendar.dart' as add2cal;
+import 'event_service.dart';
 
 class RouteData {
   final String departure;
@@ -35,7 +42,8 @@ class RouteStep {
 }
 
 class ShortestRoutePage extends StatefulWidget {
-  const ShortestRoutePage({Key? key}) : super(key: key);
+  final RouteOption option;
+  const ShortestRoutePage({Key? key, required this.option}) : super(key: key);
 
   @override
   State<ShortestRoutePage> createState() => _ShortestRoutePageState();
@@ -43,80 +51,63 @@ class ShortestRoutePage extends StatefulWidget {
 
 class _ShortestRoutePageState extends State<ShortestRoutePage> {
   RouteData? routeData;
-  bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    fetchRouteData();
+    _initializeRouteData();
   }
 
-  // 백엔드에서 데이터를 받아오는 함수 (모의 데이터 사용)
-  Future<void> fetchRouteData() async {
-    setState(() {
-      isLoading = true;
-    });
-
-    // 실제로는 백엔드 API 호출
-    // final response = await http.get(Uri.parse('/api/shortest-route'));
-    // final data = jsonDecode(response.body);
-
-    // 모의 데이터로 1초 지연
-    await Future.delayed(const Duration(seconds: 1));
-
-    final mockData = RouteData(
-      departure: "서울역",
-      destination: "강남역",
-      estimatedTime: "50분",
-      totalDistance: "23.5km",
-      routes: [
-        RouteStep(
-          id: 1,
-          step: "서울역 출발",
-          method: "도보",
-          duration: "3분",
-          description: "서울역 1번 출구로 나와서 지하철 4호선 승강장으로 이동",
-          icon: "🚶‍♂️",
-        ),
-        RouteStep(
-          id: 2,
-          step: "지하철 4호선 탑승",
-          method: "지하철",
-          duration: "15분",
-          description: "4호선 당고개 방면 → 동대문역사문화공원역까지 (8정거장)",
-          icon: "🚇",
-        ),
-        RouteStep(
-          id: 3,
-          step: "동대문역사문화공원역 환승",
-          method: "환승",
-          duration: "5분",
-          description: "2호선으로 환승 (환승통로 이용)",
-          icon: "🔄",
-        ),
-        RouteStep(
-          id: 4,
-          step: "지하철 2호선 탑승",
-          method: "지하철",
-          duration: "20분",
-          description: "2호선 잠실 방면 → 강남역까지 (11정거장)",
-          icon: "🚇",
-        ),
-        RouteStep(
-          id: 5,
-          step: "강남역 도착",
-          method: "도보",
-          duration: "2분",
-          description: "강남역 12번 출구로 나와서 목적지 도착",
-          icon: "🏁",
-        ),
-      ],
+  void _initializeRouteData() {
+    final main = widget.option.main;
+    final totalDistMeters = widget.option.sub.fold<double>(
+      0,
+      (sum, leg) => sum + leg.steps.fold<double>(0, (lsum, step) => lsum + step.distance),
     );
-
     setState(() {
-      routeData = mockData;
-      isLoading = false;
+      routeData = RouteData(
+        departure: main.origin,
+        destination: main.destination,
+        estimatedTime: '\\${(main.duration / 60).ceil()}분',
+        totalDistance: '\\${(totalDistMeters / 1000).toStringAsFixed(1)}km',
+        routes: widget.option.sub.asMap().entries.map((entry) {
+          final idx = entry.key;
+          final leg = entry.value;
+          final durMs = (leg.to.arrival ?? leg.from.departure)! - (leg.from.departure ?? leg.to.arrival)!;
+          final durMin = (durMs / 60000).ceil();
+          final desc = leg.steps.map((s) => s.streetName).join(' → ');
+          return RouteStep(
+            id: idx,
+            step: leg.mode,
+            method: leg.transitLeg ? '대중교통' : '도보',
+            duration: '\\$durMin분',
+            description: desc,
+            icon: leg.mode,
+          );
+        }).toList(),
+      );
     });
+  }
+
+  void _addEventToCalendar() {
+    if (routeData == null) return;
+    final minutes = int.tryParse(routeData!.estimatedTime.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    final start = DateTime.now();
+    final end = start.add(Duration(minutes: minutes));
+    final add2cal.Event calendarEvent = add2cal.Event(
+      title: '최단 경로',
+      description: '출발: ${routeData!.departure}, 도착: ${routeData!.destination}',
+      location: '',
+      startDate: start,
+      endDate: end,
+    );
+    add2cal.Add2Calendar.addEvent2Cal(calendarEvent);
+    EventService().addEventWithDetails(
+      start,
+      '출발: ${routeData!.departure}, 도착: ${routeData!.destination}',
+      title: '최단 경로',
+      time: DateFormat('HH:mm').format(start),
+    );
   }
 
   @override
@@ -143,28 +134,7 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
         ),
         iconTheme: const IconThemeData(color: Color(0xFF1F2937)),
       ),
-      body: isLoading ? _buildLoadingWidget() : _buildRouteContent(),
-    );
-  }
-
-  Widget _buildLoadingWidget() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
-          ),
-          SizedBox(height: 16),
-          Text(
-            '경로를 찾는 중...',
-            style: TextStyle(
-              color: Color(0xFF6B7280),
-              fontSize: 16,
-            ),
-          ),
-        ],
-      ),
+      body: routeData == null ? const SizedBox() : _buildRouteContent(),
     );
   }
 
@@ -182,6 +152,8 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
           const SizedBox(height: 24),
           _buildWarningCard(),
           const SizedBox(height: 24),
+          _buildCalendarButton(),
+          const SizedBox(height: 16),
           _buildRefreshButton(),
         ],
       ),
@@ -292,38 +264,41 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
   }
 
   Widget _buildLocationItem(String label, String location, Color color) {
-    return Row(
-      children: [
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF6B7280),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF6B7280),
+                ),
               ),
-            ),
-            Text(
-              location,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1F2937),
+              Text(
+                location,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1F2937),
+                ),
               ),
-            ),
-          ],
-        ),
-      ],
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -447,51 +422,49 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
+                      // step, method, duration in a single row to prevent overflow
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
                               route.step,
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFF1F2937),
                               ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF2563EB).withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  route.method,
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF2563EB),
-                                  ),
-                                ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2563EB).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                route.duration,
+                              child: Text(
+                                route.method,
                                 style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
                                   color: Color(0xFF2563EB),
                                 ),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ],
-                          ),
-                        ],
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              route.duration,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF2563EB),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -536,10 +509,34 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
     );
   }
 
+  Widget _buildCalendarButton() {
+    return Center(
+      child: ElevatedButton(
+        onPressed: _addEventToCalendar,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF10B981),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 4,
+        ),
+        child: const Text(
+          '캘린더에 저장',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildRefreshButton() {
     return Center(
       child: ElevatedButton(
-        onPressed: fetchRouteData,
+        onPressed: _initializeRouteData,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF2563EB),
           foregroundColor: Colors.white,
