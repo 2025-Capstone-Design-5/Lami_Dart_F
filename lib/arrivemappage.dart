@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'main.dart';
 import 'search_history_service.dart';
+import 'time_setting_page.dart';
 
 class ArriveMapPage extends StatefulWidget {
   final String? initialDeparture;
@@ -185,8 +186,32 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
           ),
           
           // 경로 정보 표시
-          if (showMap && searchedDeparture != null && searchedDestination != null)
+          if (showMap && searchedDeparture != null && searchedDestination != null) ...[
             _buildRouteInfo(),
+            const SizedBox(height: 16),
+            Center(
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => TimeSettingPage(
+                        departureName: searchedDeparture,
+                        departureAddress: searchedDepartureAddress,
+                        destinationName: searchedDestination,
+                        destinationAddress: searchedDestinationAddress,
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('확인'),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -586,20 +611,22 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
   }
 
   void _selectHistoryItem(Map<String, dynamic> place) {
+    // 히스토리 주소에 placeholder('사용자 입력')가 있으면 name으로 대체
+    final String addr = place['address'] == '사용자 입력' ? place['name'] : place['address'];
     setState(() {
       if (isDepartureSearch) {
         searchedDeparture = place['name'];
-        searchedDepartureAddress = place['address'];
+        searchedDepartureAddress = addr;
         _departureController.text = searchedDeparture!;
       } else {
         searchedDestination = place['name'];
-        searchedDestinationAddress = place['address'];
+        searchedDestinationAddress = addr;
         _destinationController.text = searchedDestination!;
       }
       
       _searchHistoryService.addSearchHistory(
         place['name'],
-        place['address']
+        addr,
       );
       _loadData();
       _updateMapVisibility();
@@ -642,19 +669,19 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
     if (searchResults.isNotEmpty) {
       _selectLocation(searchResults.first);
     } else {
-      // 직접 입력된 경우
+      // 직접 입력된 경우: 주소를 입력값으로 설정
       setState(() {
         if (isDeparture) {
           searchedDeparture = value;
-          searchedDepartureAddress = '사용자 입력';
+          searchedDepartureAddress = value;
         } else {
           searchedDestination = value;
-          searchedDestinationAddress = '사용자 입력';
+          searchedDestinationAddress = value;
         }
         showSearchResults = false;
         showSearchHistory = true;
         
-        _searchHistoryService.addSearchHistory(value, '사용자 입력');
+        _searchHistoryService.addSearchHistory(value, value);
         _loadData();
         _updateMapVisibility();
       });

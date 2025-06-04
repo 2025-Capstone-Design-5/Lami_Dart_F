@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
+
+import 'package:intl/intl.dart';
+import 'models/route_response.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:add_2_calendar/add_2_calendar.dart' as add2cal;
+import 'event_service.dart';
+
 
 enum TransportMode {
   bus('버스', Icons.directions_bus, Color(0xFF10B981)),
@@ -40,7 +47,14 @@ class RouteOption {
     return RouteOption(
       id: json['id'],
       transportMode: TransportMode.values.firstWhere(
-              (mode) => mode.name == json['transportMode']
+              (mode) => mode.name 
+        
+        
+        
+        
+        
+        
+      json['transportMode']
       ),
       routeName: json['routeName'],
       estimatedTime: json['estimatedTime'],
@@ -146,14 +160,10 @@ class RouteApiService {
 }
 
 class ShortestRoutePage extends StatefulWidget {
-  final String? departure;
-  final String? destination;
 
-  const ShortestRoutePage({
-    Key? key,
-    this.departure,
-    this.destination,
-  }) : super(key: key);
+  final RouteOption option;
+  const ShortestRoutePage({Key? key, required this.option}) : super(key: key);
+
 
   @override
   State<ShortestRoutePage> createState() => _ShortestRoutePageState();
@@ -161,195 +171,65 @@ class ShortestRoutePage extends StatefulWidget {
 
 class _ShortestRoutePageState extends State<ShortestRoutePage> {
   RouteData? routeData;
-  TransportMode? selectedMode;
-  RouteOption? selectedRoute;
-  bool isLoading = true;
-  bool showModeSelection = true;
-  bool showRouteOptions = false;
-  bool showRouteDetail = false;
-  String? errorMessage;
 
   @override
   void initState() {
     super.initState();
-    fetchRouteData();
+    _initializeRouteData();
   }
 
-  Future<void> fetchRouteData() async {
-    setState(() {
-      isLoading = true;
-      errorMessage = null;
-      showModeSelection = true;
-      showRouteOptions = false;
-      showRouteDetail = false;
-      selectedMode = null;
-      selectedRoute = null;
-    });
-
-    try {
-      // 실제 환경에서는 RouteApiService.fetchRoutes() 사용
-      // final data = await RouteApiService.fetchRoutes(
-      //   departure: widget.departure ?? "서울역",
-      //   destination: widget.destination ?? "강남역",
-      // );
-
-      // 목업 데이터 (개발/테스트용)
-      await Future.delayed(const Duration(seconds: 1));
-      final data = _getMockData();
-
-      setState(() {
-        routeData = data;
-        isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        isLoading = false;
-        errorMessage = e.toString();
-      });
-    }
-  }
-
-  RouteData _getMockData() {
-    return RouteData(
-      departure: widget.departure ?? "서울역",
-      destination: widget.destination ?? "강남역",
-      routesByMode: {
-        TransportMode.bus: [
-          RouteOption(
-            id: "bus_1",
-            transportMode: TransportMode.bus,
-            routeName: "최단시간",
-            estimatedTime: "58분",
-            totalDistance: "24.8km",
-            cost: "1,500원",
-            transferCount: 0,
-            additionalInfo: "직행 · 배차간격 5-7분",
-            routes: [
-              RouteStep(id: 1, step: "서울역 출발", method: "도보", duration: "5분", description: "서울역 광장 버스정류장으로 이동", icon: "🚶‍♂️"),
-              RouteStep(id: 2, step: "간선버스 472번 탑승", method: "버스", duration: "48분", description: "472번 강남역 방면 → 강남역 정류장까지", icon: "🚌"),
-              RouteStep(id: 3, step: "강남역 도착", method: "도보", duration: "5분", description: "강남역 정류장에서 목적지까지 도보 이동", icon: "🏁"),
-            ],
-          ),
-          RouteOption(
-            id: "bus_2",
-            transportMode: TransportMode.bus,
-            routeName: "최저요금",
-            estimatedTime: "65분",
-            totalDistance: "25.2km",
-            cost: "1,300원",
-            transferCount: 1,
-            additionalInfo: "1회 환승 · 심야시간 운행",
-            routes: [
-              RouteStep(id: 1, step: "서울역 출발", method: "도보", duration: "3분", description: "서울역 2번 출구 버스정류장", icon: "🚶‍♂️"),
-              RouteStep(id: 2, step: "간선버스 143번 탑승", method: "버스", duration: "25분", description: "143번 → 교대역 정류장까지", icon: "🚌"),
-              RouteStep(id: 3, step: "교대역 환승", method: "환승", duration: "5분", description: "507번 버스로 환승", icon: "🔄"),
-              RouteStep(id: 4, step: "간선버스 507번 탑승", method: "버스", duration: "28분", description: "507번 → 강남역까지", icon: "🚌"),
-              RouteStep(id: 5, step: "강남역 도착", method: "도보", duration: "4분", description: "목적지까지 도보 이동", icon: "🏁"),
-            ],
-          ),
-        ],
-        TransportMode.subway: [
-          RouteOption(
-            id: "subway_1",
-            transportMode: TransportMode.subway,
-            routeName: "최단시간",
-            estimatedTime: "45분",
-            totalDistance: "23.1km",
-            cost: "1,950원",
-            transferCount: 1,
-            additionalInfo: "1회 환승 · 출근시간 혼잡",
-            routes: [
-              RouteStep(id: 1, step: "서울역 출발", method: "도보", duration: "3분", description: "서울역 1번 출구로 나와서 지하철 4호선 승강장", icon: "🚶‍♂️"),
-              RouteStep(id: 2, step: "지하철 4호선 탑승", method: "지하철", duration: "15분", description: "4호선 당고개 방면 → 동대문역사문화공원역 (8정거장)", icon: "🚇"),
-              RouteStep(id: 3, step: "동대문역사문화공원역 환승", method: "환승", duration: "5분", description: "2호선으로 환승 (환승통로 이용)", icon: "🔄"),
-              RouteStep(id: 4, step: "지하철 2호선 탑승", method: "지하철", duration: "20분", description: "2호선 잠실 방면 → 강남역 (11정거장)", icon: "🚇"),
-              RouteStep(id: 5, step: "강남역 도착", method: "도보", duration: "2분", description: "강남역 12번 출구로 목적지 도착", icon: "🏁"),
-            ],
-          ),
-          RouteOption(
-            id: "subway_2",
-            transportMode: TransportMode.subway,
-            routeName: "환승최소",
-            estimatedTime: "52분",
-            totalDistance: "26.4km",
-            cost: "1,950원",
-            transferCount: 2,
-            additionalInfo: "2회 환승 · 상대적으로 여유로움",
-            routes: [
-              RouteStep(id: 1, step: "서울역 출발", method: "도보", duration: "4분", description: "서울역 지하철 1호선 승강장", icon: "🚶‍♂️"),
-              RouteStep(id: 2, step: "지하철 1호선 탑승", method: "지하철", duration: "8분", description: "1호선 인천 방면 → 시청역 (3정거장)", icon: "🚇"),
-              RouteStep(id: 3, step: "시청역 환승", method: "환승", duration: "4분", description: "2호선으로 환승", icon: "🔄"),
-              RouteStep(id: 4, step: "지하철 2호선 탑승", method: "지하철", duration: "33분", description: "2호선 잠실 방면 → 강남역 (18정거장)", icon: "🚇"),
-              RouteStep(id: 5, step: "강남역 도착", method: "도보", duration: "3분", description: "강남역 12번 출구로 목적지 도착", icon: "🏁"),
-            ],
-          ),
-        ],
-        TransportMode.transfer: [
-          RouteOption(
-            id: "transfer_1",
-            transportMode: TransportMode.transfer,
-            routeName: "최적경로",
-            estimatedTime: "42분",
-            totalDistance: "22.8km",
-            cost: "1,950원",
-            transferCount: 1,
-            additionalInfo: "버스+지하철 · 실시간 최적화",
-            routes: [
-              RouteStep(id: 1, step: "서울역 출발", method: "도보", duration: "3분", description: "서울역 광장 버스정류장", icon: "🚶‍♂️"),
-              RouteStep(id: 2, step: "간선버스 162번 탑승", method: "버스", duration: "18분", description: "162번 → 을지로입구역 정류장", icon: "🚌"),
-              RouteStep(id: 3, step: "을지로입구역 환승", method: "환승", duration: "4분", description: "지하철 2호선으로 환승", icon: "🔄"),
-              RouteStep(id: 4, step: "지하철 2호선 탑승", method: "지하철", duration: "15분", description: "2호선 잠실 방면 → 강남역 (9정거장)", icon: "🚇"),
-              RouteStep(id: 5, step: "강남역 도착", method: "도보", duration: "2분", description: "강남역 12번 출구로 목적지 도착", icon: "🏁"),
-            ],
-          ),
-          RouteOption(
-            id: "transfer_2",
-            transportMode: TransportMode.transfer,
-            routeName: "저렴한경로",
-            estimatedTime: "48분",
-            totalDistance: "24.1km",
-            cost: "1,750원",
-            transferCount: 1,
-            additionalInfo: "버스+지하철 · 요금 절약형",
-            routes: [
-              RouteStep(id: 1, step: "서울역 출발", method: "도보", duration: "5분", description: "서울역 버스정류장", icon: "🚶‍♂️"),
-              RouteStep(id: 2, step: "광역버스 9401번 탑승", method: "버스", duration: "22분", description: "9401번 → 삼성역 정류장", icon: "🚌"),
-              RouteStep(id: 3, step: "삼성역 환승", method: "환승", duration: "6분", description: "지하철 2호선으로 환승", icon: "🔄"),
-              RouteStep(id: 4, step: "지하철 2호선 탑승", method: "지하철", duration: "4분", description: "2호선 신도림 방면 → 강남역 (2정거장)", icon: "🚇"),
-              RouteStep(id: 5, step: "강남역 도착", method: "도보", duration: "3분", description: "강남역 12번 출구로 목적지 도착", icon: "🏁"),
-            ],
-          ),
-        ],
-      },
+<<<
+  void _initializeRouteData() {
+    final main = widget.option.main;
+    final totalDistMeters = widget.option.sub.fold<double>(
+      0,
+      (sum, leg) => sum + leg.steps.fold<double>(0, (lsum, step) => lsum + step.distance),
     );
-  }
-
-  void selectTransportMode(TransportMode mode) {
     setState(() {
-      selectedMode = mode;
-      showModeSelection = false;
-      showRouteOptions = true;
-      showRouteDetail = false;
-      selectedRoute = null;
+      routeData = RouteData(
+        departure: main.origin,
+        destination: main.destination,
+        estimatedTime: '\\${(main.duration / 60).ceil()}분',
+        totalDistance: '\\${(totalDistMeters / 1000).toStringAsFixed(1)}km',
+        routes: widget.option.sub.asMap().entries.map((entry) {
+          final idx = entry.key;
+          final leg = entry.value;
+          final durMs = (leg.to.arrival ?? leg.from.departure)! - (leg.from.departure ?? leg.to.arrival)!;
+          final durMin = (durMs / 60000).ceil();
+          final desc = leg.steps.map((s) => s.streetName).join(' → ');
+          return RouteStep(
+            id: idx,
+            step: leg.mode,
+            method: leg.transitLeg ? '대중교통' : '도보',
+            duration: '\\$durMin분',
+            description: desc,
+            icon: leg.mode,
+          );
+        }).toList(),
+      );
     });
   }
 
-  void selectRoute(RouteOption route) {
-    setState(() {
-      selectedRoute = route;
-      showRouteOptions = false;
-      showRouteDetail = true;
-    });
-  }
 
-  void goBackToModeSelection() {
-    setState(() {
-      showModeSelection = true;
-      showRouteOptions = false;
-      showRouteDetail = false;
-      selectedMode = null;
-      selectedRoute = null;
-    });
+  void _addEventToCalendar() {
+    if (routeData == null) return;
+    final minutes = int.tryParse(routeData!.estimatedTime.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    final start = DateTime.now();
+    final end = start.add(Duration(minutes: minutes));
+    final add2cal.Event calendarEvent = add2cal.Event(
+      title: '최단 경로',
+      description: '출발: ${routeData!.departure}, 도착: ${routeData!.destination}',
+      location: '',
+      startDate: start,
+      endDate: end,
+    );
+    add2cal.Add2Calendar.addEvent2Cal(calendarEvent);
+    EventService().addEventWithDetails(
+      start,
+      '출발: ${routeData!.departure}, 도착: ${routeData!.destination}',
+      title: '최단 경로',
+      time: DateFormat('HH:mm').format(start),
+    );
   }
 
   void goBackToRouteOptions() {
@@ -407,36 +287,9 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
         iconTheme: const IconThemeData(color: Color(0xFF1F2937)),
         leading: _getAppBarLeading(),
       ),
-      body: _buildBody(),
-    );
-  }
 
-  Widget _buildBody() {
-    if (isLoading) return _buildLoadingWidget();
-    if (errorMessage != null) return _buildErrorWidget();
-    if (showRouteDetail) return _buildRouteDetailContent();
-    if (showRouteOptions) return _buildRouteOptionsContent();
-    return _buildModeSelectionContent();
-  }
+      body: routeData == null ? const SizedBox() : _buildRouteContent(),
 
-  Widget _buildLoadingWidget() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
-          ),
-          SizedBox(height: 16),
-          Text(
-            '경로를 찾는 중...',
-            style: TextStyle(
-              color: Color(0xFF6B7280),
-              fontSize: 16,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -911,6 +764,11 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
           _buildRouteDetailSection(),
           const SizedBox(height: 24),
           _buildWarningCard(),
+
+          const SizedBox(height: 24),
+          _buildCalendarButton(),
+          const SizedBox(height: 16),
+          _buildRefreshButton(),
         ],
       ),
     );
@@ -1044,37 +902,47 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
               ),
             ],
           ),
-          if (selectedRoute!.additionalInfo != null) ...[
-            const SizedBox(height: 16),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0F9FF),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFBAE6FD)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.info_outline,
-                    color: Color(0xFF0284C7),
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      selectedRoute!.additionalInfo!,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF0284C7),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationItem(String label, String location, Color color) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
             ),
-          ],
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF6B7280),
+                ),
+              ),
+              Text(
+                location,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1F2937),
+                ),
+              ),
+            ],
+          ),
+
         ],
       ),
     );
@@ -1201,51 +1069,50 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
+                      // step, method, duration in a single row to prevent overflow
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
                               route.step,
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFF1F2937),
                               ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: selectedRoute!.transportMode.color.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  route.method,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: selectedRoute!.transportMode.color,
-                                  ),
-                                ),
+
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2563EB).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                route.duration,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: selectedRoute!.transportMode.color,
+                              child: Text(
+                                route.method,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF2563EB),
                                 ),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ],
-                          ),
-                        ],
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              route.duration,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF2563EB),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -1290,10 +1157,34 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
     );
   }
 
+  Widget _buildCalendarButton() {
+    return Center(
+      child: ElevatedButton(
+        onPressed: _addEventToCalendar,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF10B981),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 4,
+        ),
+        child: const Text(
+          '캘린더에 저장',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildRefreshButton() {
     return Center(
       child: ElevatedButton(
-        onPressed: fetchRouteData,
+        onPressed: _initializeRouteData,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF2563EB),
           foregroundColor: Colors.white,

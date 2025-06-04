@@ -1,20 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'home_page.dart';
 import 'calendar_page.dart';
 import 'assistant_page.dart';
 import 'mypage.dart';
 import 'splash_screen.dart'; // 스플래시 화면 import 추가
+import 'dart:io';
 
 /// 앱 시작 전에 환경변수를 로드합니다
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  HttpOverrides.global = MyHttpOverrides();
   try {
     await dotenv.load(fileName: ".env");
     debugPrint("[dotenv] loaded variables: ${dotenv.env}");
   } catch (e) {
     debugPrint("[dotenv] failed to load .env: $e");
   }
+  await initializeDateFormatting('ko');
   runApp(const MyApp());
 }
 
@@ -122,4 +126,14 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
   */
+}
+
+// 인증서 검증 우회를 위한 HttpOverrides
+class MyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    final client = super.createHttpClient(context);
+    client.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+    return client;
+  }
 }

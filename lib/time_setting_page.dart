@@ -2,11 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'event_service.dart'; // EventService import 추가
+import 'models/route_response.dart';
+import 'models/summary_response.dart';
+import 'route_results_page.dart'; // 경로 결과 페이지 import 추가
 
 class TimeSettingPage extends StatefulWidget {
   final Function(Duration)? onPrepTimeSet;
   final Function(String, int, int, DateTime)? onArrivalTimeSet;
+  final String? departureName;
+  final String? departureAddress;
+  final String? destinationName;
+  final String? destinationAddress;
   final String? initialArrivalPeriod;
   final int? initialArrivalHour;
   final int? initialArrivalMinute;
@@ -15,6 +23,10 @@ class TimeSettingPage extends StatefulWidget {
 
   const TimeSettingPage({
     Key? key,
+    this.departureName,
+    this.departureAddress,
+    this.destinationName,
+    this.destinationAddress,
     this.onPrepTimeSet,
     this.onArrivalTimeSet,
     this.initialArrivalPeriod,
@@ -34,16 +46,19 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
   late int arrivalHour;
   late int arrivalMinute;
   late DateTime arrivalDate;
+  // 출발지/도착지 정보 복사
+  late String? departureName;
+  late String? departureAddress;
+  late String? destinationName;
+  late String? destinationAddress;
 
   // 준비 시간 (24시간 형식)
   late int prepHour;
   late int prepMinute;
   late int prepSecond;
 
-  // 이동 소요시간 및 알람예정시간
-  Duration? travelTime;
+  // 알람예정시간
   DateTime? alarmTime;
-  bool isLoadingTravelTime = false;
 
   // EventService 인스턴스
   final EventService _eventService = EventService();
@@ -57,6 +72,12 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
   @override
   void initState() {
     super.initState();
+    // 전달받은 출발/도착지 정보 저장
+    departureName = widget.departureName;
+    departureAddress = widget.departureAddress;
+    destinationName = widget.destinationName;
+    destinationAddress = widget.destinationAddress;
+
     // 도착시간 초기값 설정
     arrivalPeriod = widget.initialArrivalPeriod ?? '오전';
     arrivalHour = widget.initialArrivalHour ?? 8;
@@ -78,55 +99,12 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
       prepSecond = 0;
     }
 
-    // 초기 로드 시 이동소요시간 가져오기
-    _fetchTravelTime();
-  }
-
-  // 백엔드에서 이동소요시간 가져오기
-  Future<void> _fetchTravelTime() async {
-    setState(() {
-      isLoadingTravelTime = true;
-    });
-
-    try {
-      final response = await http.get(
-        Uri.parse('https://your-backend-server.com/api/travel-time'),
-        headers: <String, String>{
-          'Content-Type': 'application/json; charset=UTF-8',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        int travelMinutes = data['travelTimeMinutes'] ?? 30;
-
-        setState(() {
-          travelTime = Duration(minutes: travelMinutes);
+    // 초기 로드 시 알람시간 계산
           _calculateAlarmTime();
-          isLoadingTravelTime = false;
-        });
-      } else {
-        setState(() {
-          travelTime = const Duration(minutes: 30);
-          _calculateAlarmTime();
-          isLoadingTravelTime = false;
-        });
-        print('이동소요시간 조회 실패: ${response.statusCode}');
-      }
-    } catch (e) {
-      setState(() {
-        travelTime = const Duration(minutes: 30);
-        _calculateAlarmTime();
-        isLoadingTravelTime = false;
-      });
-      print('이동소요시간 조회 에러: $e');
-    }
   }
 
   // 알람예정시간 계산
   void _calculateAlarmTime() {
-    if (travelTime == null) return;
-
     // 도착시간을 DateTime으로 변환 (선택된 날짜 기준)
     int hour24 = _convertTo24Hour(arrivalPeriod, arrivalHour);
     DateTime arrivalDateTime = DateTime(
@@ -140,9 +118,9 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
     // 준비시간 계산
     Duration prepTime = _calculatePrepTime();
 
-    // 알람예정시간 = 도착시간 - (준비시간 + 이동소요시간)
+    // 알람예정시간 = 도착시간 - 준비시간
     setState(() {
-      alarmTime = arrivalDateTime.subtract(prepTime + travelTime!);
+      alarmTime = arrivalDateTime.subtract(prepTime);
     });
   }
 
@@ -218,7 +196,7 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
         }),
       );
 
-      if (response.statusCode == 200) {
+      if (response.statusCode >= 200 && response.statusCode < 300) {
         print('도착시간이 성공적으로 서버에 전송되었습니다.');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -378,10 +356,19 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
         ),
         iconTheme: const IconThemeData(color: Color(0xFF334066)),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
+        child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+              // 출발지·도착지 정보 표시
+              if (departureName != null && destinationName != null) ...[
+                Text('출발: $departureName', style: const TextStyle(fontSize: 16)),
+                const SizedBox(height: 4),
+                Text('도착: $destinationName', style: const TextStyle(fontSize: 16)),
+                const SizedBox(height: 16),
+              ],
             // 알람예정시간 표시 카드
             _alarmTimeCard(),
             const SizedBox(height: 16),
@@ -426,7 +413,6 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
                 _onTimeChanged();
               },
             ),
-            const Spacer(),
             // 설정 완료 버튼
             SizedBox(
               width: double.infinity,
@@ -449,33 +435,74 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
                   );
 
                   try {
-                    // 도착시간 서버로 전송
-                    await _sendArrivalTimeToServer();
-
-                    // 캘린더에 알람 일정 저장
-                    _saveAlarmToCalendar();
-
-                    // 준비시간 계산 및 홈페이지로 전달
-                    if (widget.onPrepTimeSet != null) {
-                      widget.onPrepTimeSet!(_calculatePrepTime());
-                    }
-
-                    // 도착시간과 날짜를 홈페이지로 전달
-                    if (widget.onArrivalTimeSet != null) {
-                      widget.onArrivalTimeSet!(arrivalPeriod, arrivalHour, arrivalMinute, arrivalDate);
-                    }
-
-                    // 로딩 인디케이터 제거
+                      final serverBaseUrl = dotenv.env['SERVER_BASE_URL']!;
+                      final int hour24 = _convertTo24Hour(arrivalPeriod, arrivalHour);
+                      final String timeString = '${hour24.toString().padLeft(2, '0')}:${arrivalMinute.toString().padLeft(2, '0')}:00';
+                      final String dateString = DateFormat('yyyy-MM-dd').format(arrivalDate);
+                      final String url = '$serverBaseUrl/traffic/routes';
+                      final headers = <String, String>{
+                        'Content-Type': 'application/json; charset=UTF-8',
+                      };
+                      final body = jsonEncode({
+                        'fromAddress': departureAddress,
+                        'toAddress': destinationAddress,
+                        'date': dateString,
+                        'time': timeString,
+                        'arriveBy': false,
+                      });
+                      debugPrint('Request POST: $url');
+                      debugPrint('Headers: $headers');
+                      debugPrint('Body: $body');
+                      final response = await http.post(
+                        Uri.parse(url),
+                        headers: headers,
+                        body: body,
+                      );
+                      debugPrint('Response status: \\${response.statusCode}');
+                      debugPrint('Response body: \\${response.body}');
+                      if (response.statusCode >= 200 && response.statusCode < 300) {
+                        try {
+                        // 응답을 SummaryResponse로 파싱
+                          debugPrint('Starting to parse response...');
+                        final summaryResponse = SummaryResponse.parse(response.body);
+                          debugPrint('SummaryResponse parsed successfully');
+                        final summaryData = summaryResponse.data;
+                          debugPrint('Parsed summaryData: $summaryData');
+                        if (mounted) {
+                          Navigator.of(context).pop(); // 로딩 다이얼로그 닫기
+                            debugPrint('Navigating to RouteResultsPage...');
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => RouteResultsPage(summaryData: summaryData),
+                            ),
+                          );
+                          }
+                        } catch (parseError) {
+                          debugPrint('Parse error: $parseError');
+                          if (mounted) {
+                            Navigator.of(context).pop();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('응답 파싱 실패: $parseError')),
+                            );
+                          }
+                        }
+                      } else {
                     if (mounted) {
                       Navigator.of(context).pop();
-                      // 페이지 종료
-                      Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('경로 조회 실패: ${response.statusCode}')),
+                          );
                     }
-                  } catch (e) {
-                    // 오류 발생 시 로딩 인디케이터 제거
-                    if (mounted) {
-                      Navigator.of(context).pop();
-                    }
+                      }
+                    } catch (e) {
+                      debugPrint('Error occurred: $e');
+                      if (mounted) {
+                        Navigator.of(context).pop(); // 로딩 다이얼로그 닫기
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('오류가 발생했습니다: $e')),
+                        );
+                      }
                   }
                 },
                 style: ElevatedButton.styleFrom(
@@ -497,6 +524,7 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
               ),
             ),
           ],
+          ),
         ),
       ),
     );
@@ -542,29 +570,7 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                if (isLoadingTravelTime)
-                  const Row(
-                    children: [
-                      SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        '계산 중...',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  )
-                else if (alarmTime != null)
+                if (alarmTime != null)
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -597,27 +603,6 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
                   ),
               ],
             ),
-          ),
-          if (travelTime != null)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                const Text(
-                  '이동시간',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.white70,
-                  ),
-                ),
-                Text(
-                  '${travelTime!.inMinutes}분',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
             ),
         ],
       ),

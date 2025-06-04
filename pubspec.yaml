@@ -23,6 +23,7 @@ dependencies:
   flutter_web_auth_2: ^4.1.0  # OAuth 인증 (migrated)
   crypto: ^3.0.1  # PKCE 생성
   flutter_dotenv: ^5.0.2  # 환경변수 관리
+  add_2_calendar: ^2.1.0
 
 dev_dependencies:
   flutter_test:

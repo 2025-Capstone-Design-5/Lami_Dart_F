@@ -11,6 +11,7 @@ import 'arrivemappage.dart';
 import 'dart:async';
 import 'event_service.dart'; // EventService 불러오기
 import 'calendar_page.dart' hide EventService; // CalendarPage 불러오기
+import 'route_store.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -444,9 +445,19 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _goToShortestRoutePage() {
+    // 선택된 경로가 없으면 안내 메시지
+    if (RouteStore.selectedOption == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('먼저 경로를 선택해주세요')),
+      );
+      return;
+    }
+    // ShortestRoutePage로 이동
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const ShortestRoutePage()),
+      MaterialPageRoute(
+        builder: (context) => ShortestRoutePage(option: RouteStore.selectedOption!),
+      ),
     );
   }
 
@@ -496,7 +507,12 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3EFEE),
-      body: SingleChildScrollView(
+      body: SafeArea(
+        top: true,
+        left: false,
+        right: false,
+        bottom: false,
+        child: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 16),
           child: Column(
@@ -930,6 +946,10 @@ class _HomePageState extends State<HomePage> {
             ),
           );
         },
+                          ),
+                      ],
+                    ),
+                  ),
       ),
       if (todayEvents.length > 3)
         Padding(
@@ -946,9 +966,6 @@ class _HomePageState extends State<HomePage> {
         ),
     ],
     ),
-    ),
-    ),
-    ],
     ),
     ),
     ),
