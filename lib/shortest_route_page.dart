@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'package:intl/intl.dart';
 import 'models/route_response.dart';
 import 'package:http/http.dart' as http;
@@ -7,20 +8,95 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:add_2_calendar/add_2_calendar.dart' as add2cal;
 import 'event_service.dart';
 
+
+enum TransportMode {
+  bus('버스', Icons.directions_bus, Color(0xFF10B981)),
+  subway('지하철', Icons.train, Color(0xFF2563EB)),
+  transfer('버스+지하철', Icons.transfer_within_a_station, Color(0xFF8B5CF6));
+
+  const TransportMode(this.label, this.icon, this.color);
+  final String label;
+  final IconData icon;
+  final Color color;
+}
+
+class RouteOption {
+  final String id;
+  final TransportMode transportMode;
+  final String routeName; // 경로 이름 (예: "최단시간", "최저요금", "환승최소")
+  final String estimatedTime;
+  final String totalDistance;
+  final String cost;
+  final int transferCount; // 환승 횟수
+  final List<RouteStep> routes;
+  final String? additionalInfo; // 추가 정보
+
+  RouteOption({
+    required this.id,
+    required this.transportMode,
+    required this.routeName,
+    required this.estimatedTime,
+    required this.totalDistance,
+    required this.cost,
+    required this.transferCount,
+    required this.routes,
+    this.additionalInfo,
+  });
+
+  factory RouteOption.fromJson(Map<String, dynamic> json) {
+    return RouteOption(
+      id: json['id'],
+      transportMode: TransportMode.values.firstWhere(
+              (mode) => mode.name 
+        
+        
+        
+        
+        
+        
+      json['transportMode']
+      ),
+      routeName: json['routeName'],
+      estimatedTime: json['estimatedTime'],
+      totalDistance: json['totalDistance'],
+      cost: json['cost'],
+      transferCount: json['transferCount'] ?? 0,
+      routes: (json['routes'] as List)
+          .map((step) => RouteStep.fromJson(step))
+          .toList(),
+      additionalInfo: json['additionalInfo'],
+    );
+  }
+}
+
 class RouteData {
   final String departure;
   final String destination;
-  final String estimatedTime;
-  final String totalDistance;
-  final List<RouteStep> routes;
+  final Map<TransportMode, List<RouteOption>> routesByMode;
 
   RouteData({
     required this.departure,
     required this.destination,
-    required this.estimatedTime,
-    required this.totalDistance,
-    required this.routes,
+    required this.routesByMode,
   });
+
+  factory RouteData.fromJson(Map<String, dynamic> json) {
+    Map<TransportMode, List<RouteOption>> routesByMode = {};
+
+    for (var mode in TransportMode.values) {
+      if (json['routesByMode'][mode.name] != null) {
+        routesByMode[mode] = (json['routesByMode'][mode.name] as List)
+            .map((route) => RouteOption.fromJson(route))
+            .toList();
+      }
+    }
+
+    return RouteData(
+      departure: json['departure'],
+      destination: json['destination'],
+      routesByMode: routesByMode,
+    );
+  }
 }
 
 class RouteStep {
@@ -39,11 +115,55 @@ class RouteStep {
     required this.description,
     required this.icon,
   });
+
+  factory RouteStep.fromJson(Map<String, dynamic> json) {
+    return RouteStep(
+      id: json['id'],
+      step: json['step'],
+      method: json['method'],
+      duration: json['duration'],
+      description: json['description'],
+      icon: json['icon'],
+    );
+  }
+}
+
+// API 서비스 클래스
+class RouteApiService {
+  static const String baseUrl = 'https://your-api-server.com/api';
+
+  static Future<RouteData> fetchRoutes({
+    required String departure,
+    required String destination,
+    String? departureTime,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/routes'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'departure': departure,
+          'destination': destination,
+          'departureTime': departureTime,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return RouteData.fromJson(jsonDecode(response.body));
+      } else {
+        throw Exception('Failed to fetch routes: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Network error: $e');
+    }
+  }
 }
 
 class ShortestRoutePage extends StatefulWidget {
+
   final RouteOption option;
   const ShortestRoutePage({Key? key, required this.option}) : super(key: key);
+
 
   @override
   State<ShortestRoutePage> createState() => _ShortestRoutePageState();
@@ -58,6 +178,7 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
     _initializeRouteData();
   }
 
+<<<
   void _initializeRouteData() {
     final main = widget.option.main;
     final totalDistMeters = widget.option.sub.fold<double>(
@@ -89,6 +210,7 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
     });
   }
 
+
   void _addEventToCalendar() {
     if (routeData == null) return;
     final minutes = int.tryParse(routeData!.estimatedTime.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
@@ -110,6 +232,36 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
     );
   }
 
+  void goBackToRouteOptions() {
+    setState(() {
+      showRouteOptions = true;
+      showRouteDetail = false;
+      selectedRoute = null;
+    });
+  }
+
+  String _getAppBarTitle() {
+    if (showRouteDetail) return '상세 경로';
+    if (showRouteOptions) return '${selectedMode?.label} 경로 선택';
+    return '경로 검색';
+  }
+
+  Widget? _getAppBarLeading() {
+    if (showRouteDetail) {
+      return IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: goBackToRouteOptions,
+      );
+    }
+    if (showRouteOptions) {
+      return IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: goBackToModeSelection,
+      );
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -117,10 +269,10 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
       appBar: AppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(Icons.navigation, color: Color(0xFF2563EB)),
-            SizedBox(width: 8),
-            Text('최단 경로'),
+          children: [
+            const Icon(Icons.navigation, color: Color(0xFF2563EB)),
+            const SizedBox(width: 8),
+            Text(_getAppBarTitle()),
           ],
         ),
         centerTitle: true,
@@ -133,12 +285,64 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
           fontSize: 20,
         ),
         iconTheme: const IconThemeData(color: Color(0xFF1F2937)),
+        leading: _getAppBarLeading(),
       ),
+
       body: routeData == null ? const SizedBox() : _buildRouteContent(),
+
     );
   }
 
-  Widget _buildRouteContent() {
+  Widget _buildErrorWidget() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              color: Color(0xFFEF4444),
+              size: 64,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '경로를 불러올 수 없습니다',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1F2937),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              errorMessage!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF6B7280),
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: fetchRouteData,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text('다시 시도'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModeSelectionContent() {
     if (routeData == null) return const SizedBox();
 
     return SingleChildScrollView(
@@ -146,11 +350,421 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildRouteInfoCard(),
+          _buildDepartureDestinationCard(),
+          const SizedBox(height: 24),
+          _buildTransportModeSelection(),
+          const SizedBox(height: 24),
+          _buildRefreshButton(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransportModeSelection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '교통수단 선택',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1F2937),
+          ),
+        ),
+        const SizedBox(height: 16),
+        ...TransportMode.values.map((mode) {
+          final routes = routeData!.routesByMode[mode] ?? [];
+          if (routes.isEmpty) return const SizedBox();
+
+          return _buildTransportModeCard(mode, routes.length);
+        }).toList(),
+      ],
+    );
+  }
+
+  Widget _buildTransportModeCard(TransportMode mode, int routeCount) {
+    final routes = routeData!.routesByMode[mode] ?? [];
+    final bestRoute = routes.isNotEmpty ? routes.first : null;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => selectTransportMode(mode),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: mode.color.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    mode.icon,
+                    color: mode.color,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            mode.label,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1F2937),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: mode.color.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '$routeCount개 경로',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: mode.color,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (bestRoute != null) ...[
+                        Text(
+                          '최단: ${bestRoute.estimatedTime} · ${bestRoute.cost}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          bestRoute.routeName,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: mode.color,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right,
+                  color: Color(0xFF9CA3AF),
+                  size: 24,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRouteOptionsContent() {
+    if (selectedMode == null || routeData == null) return const SizedBox();
+
+    final routes = routeData!.routesByMode[selectedMode!] ?? [];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildDepartureDestinationCard(),
+          const SizedBox(height: 24),
+          _buildRouteOptionsSection(routes),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRouteOptionsSection(List<RouteOption> routes) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${selectedMode!.label} 경로 옵션',
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1F2937),
+          ),
+        ),
+        const SizedBox(height: 16),
+        ...routes.map((route) => _buildRouteOptionCard(route)).toList(),
+      ],
+    );
+  }
+
+  Widget _buildRouteOptionCard(RouteOption option) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => selectRoute(option),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: option.transportMode.color.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        option.transportMode.icon,
+                        color: option.transportMode.color,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                option.routeName,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1F2937),
+                                ),
+                              ),
+                              if (option.transferCount > 0) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0x1AF59E0B),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '환승${option.transferCount}회',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      color: Color(0xFFF59E0B),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${option.estimatedTime} · ${option.totalDistance}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF6B7280),
+                            ),
+                          ),
+                          if (option.additionalInfo != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              option.additionalInfo!,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF9CA3AF),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: option.transportMode.color.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            option.estimatedTime,
+                            style: TextStyle(
+                              color: option.transportMode.color,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          option.cost,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(
+                      Icons.chevron_right,
+                      color: Color(0xFF9CA3AF),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDepartureDestinationCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '경로 정보',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1F2937),
+            ),
+          ),
+          const SizedBox(height: 20),
+          _buildLocationItem(
+            "출발지",
+            routeData!.departure,
+            const Color(0xFF10B981),
+          ),
+          const SizedBox(height: 16),
+          _buildLocationItem(
+            "도착지",
+            routeData!.destination,
+            const Color(0xFFEF4444),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationItem(String label, String location, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF6B7280),
+              ),
+            ),
+            Text(
+              location,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1F2937),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRouteDetailContent() {
+    if (selectedRoute == null) return const SizedBox();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildSelectedRouteInfoCard(),
           const SizedBox(height: 24),
           _buildRouteDetailSection(),
           const SizedBox(height: 24),
           _buildWarningCard(),
+
           const SizedBox(height: 24),
           _buildCalendarButton(),
           const SizedBox(height: 16),
@@ -160,7 +774,7 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
     );
   }
 
-  Widget _buildRouteInfoCard() {
+  Widget _buildSelectedRouteInfoCard() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -180,18 +794,48 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                '경로 정보',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1F2937),
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: selectedRoute!.transportMode.color.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      selectedRoute!.transportMode.icon,
+                      color: selectedRoute!.transportMode.color,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        selectedRoute!.routeName,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1F2937),
+                        ),
+                      ),
+                      Text(
+                        selectedRoute!.transportMode.label,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2563EB).withOpacity(0.1),
+                  color: selectedRoute!.transportMode.color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
@@ -204,9 +848,9 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      routeData!.estimatedTime,
-                      style: const TextStyle(
-                        color: Color(0xFF2563EB),
+                      selectedRoute!.estimatedTime,
+                      style: TextStyle(
+                        color: selectedRoute!.transportMode.color,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -242,14 +886,14 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
                   children: [
                     _buildInfoBox(
                       "예상 소요 시간",
-                      routeData!.estimatedTime,
-                      const Color(0xFF2563EB),
-                      const Color(0xFFEFF6FF),
+                      selectedRoute!.estimatedTime,
+                      selectedRoute!.transportMode.color,
+                      selectedRoute!.transportMode.color.withOpacity(0.1),
                     ),
                     const SizedBox(height: 12),
                     _buildInfoBox(
-                      "총 거리",
-                      routeData!.totalDistance,
+                      "총 거리 / 요금",
+                      "${selectedRoute!.totalDistance}\n${selectedRoute!.cost}",
                       const Color(0xFF6B7280),
                       const Color(0xFFF9FAFB),
                     ),
@@ -258,6 +902,7 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
               ),
             ],
           ),
+
         ],
       ),
     );
@@ -297,6 +942,7 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
               ),
             ],
           ),
+
         ],
       ),
     );
@@ -324,9 +970,10 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
           Text(
             value,
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: FontWeight.bold,
               color: textColor,
+              height: 1.2,
             ),
           ),
         ],
@@ -347,7 +994,7 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
           ),
         ),
         const SizedBox(height: 16),
-        ...routeData!.routes.asMap().entries.map((entry) {
+        ...selectedRoute!.routes.asMap().entries.map((entry) {
           int index = entry.key;
           RouteStep route = entry.value;
           return _buildRouteStepCard(route, index);
@@ -362,7 +1009,7 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
       child: Stack(
         children: [
           // 연결선
-          if (index < routeData!.routes.length - 1)
+          if (index < selectedRoute!.routes.length - 1)
             Positioned(
               left: 32,
               top: 64,
@@ -396,7 +1043,7 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
                       width: 48,
                       height: 48,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF2563EB).withOpacity(0.1),
+                        color: selectedRoute!.transportMode.color.withOpacity(0.1),
                         shape: BoxShape.circle,
                       ),
                       child: Center(
@@ -437,6 +1084,7 @@ class _ShortestRoutePageState extends State<ShortestRoutePage> {
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
+
                             const SizedBox(width: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
