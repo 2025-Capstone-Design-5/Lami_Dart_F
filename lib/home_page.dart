@@ -15,6 +15,8 @@ import 'event_service.dart'; // EventService 불러오기
 import 'calendar_page.dart' hide EventService; // CalendarPage 불러오기
 import 'route_store.dart';
 import 'package:untitled4/models/route_response.dart';
+import 'favorite_service.dart';
+import 'favorite_management_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -28,6 +30,7 @@ class _HomePageState extends State<HomePage> {
 
   // 이벤트 서비스 인스턴스
   final EventService _eventService = EventService();
+  final FavoriteService _favoriteService = FavoriteService();
 
   // 준비 시간 관련 변수
   Duration preparationTime = const Duration(minutes: 30); // 기본값 30분
@@ -56,6 +59,8 @@ class _HomePageState extends State<HomePage> {
 
     // EventService 리스너 등록
     _eventService.addListener(_refreshState);
+    _favoriteService.loadData();
+    _favoriteService.addListener(_refreshState);
   }
 
   // 알람 초기화
@@ -86,6 +91,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     // EventService 리스너 제거
     _eventService.removeListener(_refreshState);
+    _favoriteService.removeListener(_refreshState);
     countdownTimer?.cancel();
     alarmCheckTimer?.cancel();
     _stopAlarm();
@@ -500,6 +506,9 @@ class _HomePageState extends State<HomePage> {
 
     // 오늘의 일정 가져오기
     final todayEvents = _eventService.getEvents(today);
+    
+    // 상위 3개 즐겨찾기 가져오기
+    final topFavorites = _favoriteService.getTopFavorites();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3EFEE),
@@ -771,6 +780,9 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               SizedBox(height: verticalGap),
+              // 즐겨찾기 아이콘 섹션 추가
+              _buildFavoriteIcons(topFavorites),
+              SizedBox(height: verticalGap),
               // 다음 경로 박스 (기존 교통수단 아이콘들을 대체)
               GestureDetector(
                 onTap: _goToShortestRoutePage,
@@ -966,6 +978,200 @@ class _HomePageState extends State<HomePage> {
     ),
     ),
     );
+  }
+
+  // 즐겨찾기 아이콘 위젯
+  Widget _buildFavoriteIcons(List<Map<String, dynamic>> favorites) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                '즐겨찾는 장소',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const FavoriteManagementPage(),
+                    ),
+                  );
+                },
+                child: Text(
+                  '관리',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.blue[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: favorites.isEmpty
+                ? [
+                    _buildEmptyFavoriteIcon(),
+                    _buildEmptyFavoriteIcon(),
+                    _buildEmptyFavoriteIcon(),
+                  ]
+                : [
+                    for (int i = 0; i < 3; i++)
+                      i < favorites.length
+                          ? _buildFavoriteIcon(favorites[i])
+                          : _buildEmptyFavoriteIcon(),
+                  ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 즐겨찾기 아이콘
+  Widget _buildFavoriteIcon(Map<String, dynamic> favorite) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ArriveMapPage(
+              initialDestination: favorite['name'],
+              initialDestinationAddress: favorite['address'],
+            ),
+          ),
+        );
+      },
+      child: Column(
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: _getFavoriteIconColor(favorite['icon']),
+              borderRadius: BorderRadius.circular(30),
+              boxShadow: [
+                BoxShadow(
+                  color: _getFavoriteIconColor(favorite['icon']).withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Icon(
+              _getFavoriteIconData(favorite['icon']),
+              color: Colors.white,
+              size: 28,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            favorite['name'],
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Colors.black87,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 빈 즐겨찾기 아이콘
+  Widget _buildEmptyFavoriteIcon() {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const FavoriteManagementPage(),
+          ),
+        );
+      },
+      child: Column(
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(
+                color: Colors.grey[400]!,
+                width: 2,
+                style: BorderStyle.solid,
+              ),
+            ),
+            child: Icon(
+              Icons.add,
+              color: Colors.grey[600],
+              size: 28,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '추가',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 즐겨찾기 아이콘 데이터
+  IconData _getFavoriteIconData(String iconName) {
+    switch (iconName) {
+      case 'home': return Icons.home;
+      case 'work': return Icons.work;
+      case 'school': return Icons.school;
+      case 'restaurant': return Icons.restaurant;
+      case 'shopping': return Icons.shopping_cart;
+      case 'hospital': return Icons.local_hospital;
+      case 'gas_station': return Icons.local_gas_station;
+      default: return Icons.place;
+    }
+  }
+
+  // 즐겨찾기 아이콘 색상
+  Color _getFavoriteIconColor(String iconName) {
+    switch (iconName) {
+      case 'home': return Colors.green;
+      case 'work': return Colors.blue;
+      case 'school': return Colors.orange;
+      case 'restaurant': return Colors.red;
+      case 'shopping': return Colors.purple;
+      case 'hospital': return Colors.pink;
+      case 'gas_station': return Colors.brown;
+      default: return Colors.grey;
+    }
   }
 
   // 교통수단 아이콘 위젯 빌더

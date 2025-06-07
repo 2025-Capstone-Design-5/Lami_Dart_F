@@ -7,6 +7,7 @@ import 'assistant_page.dart';
 import 'mypage.dart';
 import 'splash_screen.dart'; // 스플래시 화면 import 추가
 import 'dart:io';
+import 'favorite_management_page.dart';
 
 /// 앱 시작 전에 환경변수를 로드합니다
 Future<void> main() async {
@@ -35,6 +36,9 @@ class MyApp extends StatelessWidget {
       ),
       home: const SplashScreen(), // 시작점을 스플래시 화면으로 변경
       debugShowCheckedModeBanner: false,
+      routes: {
+        '/favorite_management': (context) => const FavoriteManagementPage(),
+      },
     );
   }
 }

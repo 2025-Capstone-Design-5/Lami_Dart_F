@@ -4,6 +4,7 @@ import 'main.dart';
 import 'search_history_service.dart';
 import 'time_setting_page.dart';
 import 'tmap_service.dart';
+import 'favorite_service.dart';
 
 class ArriveMapPage extends StatefulWidget {
   final String? initialDeparture;
@@ -27,6 +28,7 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
   final TextEditingController _departureController = TextEditingController();
   final TextEditingController _destinationController = TextEditingController();
   final SearchHistoryService _searchHistoryService = SearchHistoryService();
+  final FavoriteService _favoriteService = FavoriteService();
 
   String? searchedDeparture;
   String? searchedDepartureAddress;
@@ -62,17 +64,17 @@ class _ArriveMapPageState extends State<ArriveMapPage> {
     TmapService.initialize();
     _loadData();
     _searchHistoryService.addListener(_updateUI);
+    _favoriteService.loadData();
     
     // 초기값 설정
     if (widget.initialDeparture != null) {
       searchedDeparture = widget.initialDeparture;
-      searchedDepartureAddress = widget.initialDepartureAddress;
+      searchedDepartureAddress = widget.initialDepartureAddress ?? widget.initialDeparture!;
       _departureController.text = widget.initialDeparture!;
     }
-    
     if (widget.initialDestination != null) {
       searchedDestination = widget.initialDestination;
-      searchedDestinationAddress = widget.initialDestinationAddress;
+      searchedDestinationAddress = widget.initialDestinationAddress ?? widget.initialDestination!;
       _destinationController.text = widget.initialDestination!;
     }
     
