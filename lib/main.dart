@@ -99,33 +99,11 @@ class _MainScreenState extends State<MainScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.home), label: '홈'),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: '달력'),
           BottomNavigationBarItem(icon: Icon(Icons.headset), label: '라미'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: '내정보'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: '내 정보'),
         ],
       ),
     );
   }
-  
-  // 사용하지 않는 _buildPage 메서드 제거 또는 아래와 같이 수정
-  // 필요한 경우에만 사용하세요
-  /*
-  Widget _buildPage(int index) {
-    switch (index) {
-      case 0:
-        return const HomePage();
-      case 1:
-        return const CalendarPage();
-      case 2:
-        return const AssistantPage();
-      case 3: // 마이페이지
-        return MyPage(
-          userName: widget.userName,
-          userEmail: widget.userEmail,
-        );
-      default:
-        return Container();
-    }
-  }
-  */
 }
 
 // 인증서 검증 우회를 위한 HttpOverrides

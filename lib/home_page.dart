@@ -1,17 +1,20 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import 'shortest_route_page.dart';
+import 'package:http/http.dart' as http;
 import 'time_setting_page.dart';
 import 'arrivemappage.dart';
-import 'dart:async';
 import 'event_service.dart'; // EventService 불러오기
 import 'calendar_page.dart' hide EventService; // CalendarPage 불러오기
 import 'route_store.dart';
+import 'package:untitled4/models/route_response.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -452,13 +455,6 @@ class _HomePageState extends State<HomePage> {
       );
       return;
     }
-    // ShortestRoutePage로 이동
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ShortestRoutePage(option: RouteStore.selectedOption!),
-      ),
-    );
   }
 
   void _goToTimeSettingPage() {

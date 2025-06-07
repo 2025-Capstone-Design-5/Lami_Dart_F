@@ -26,7 +26,7 @@ class _MyPageState extends State<MyPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('마이페이지'),
+        title: const Text('내 정보'),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0.5,
@@ -63,7 +63,7 @@ class _MyPageState extends State<MyPage> {
             // 즐겨찾는 장소 항목
             ListTile(
               leading: Icon(Icons.star, color: Colors.amber),
-              title: Text('즐겨찾는 장소'),
+              title: Text('자주 사용한 경로'),
               trailing: Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {
                 Navigator.push(

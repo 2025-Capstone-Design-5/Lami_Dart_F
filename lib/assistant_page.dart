@@ -25,7 +25,7 @@ class _AssistantPageState extends State<AssistantPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('어시스턴트'),
+        title: const Text('Lami Chatbot'),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0.5,
@@ -43,7 +43,7 @@ class _AssistantPageState extends State<AssistantPage> {
           const Icon(Icons.smart_toy, size: 60, color: Colors.blue),
           const SizedBox(height: 8),
           const Text(
-            'AI 어시스턴트',
+            'Lami',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),

@@ -148,7 +148,7 @@ class UpdatePage extends StatelessWidget {
                 BottomNavigationBarItem(icon: Icon(Icons.home), label: '홈'),
                 BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: '달력'),
                 BottomNavigationBarItem(icon: Icon(Icons.headset), label: '헤드셋'),
-                BottomNavigationBarItem(icon: Icon(Icons.person), label: '내정보'),
+                BottomNavigationBarItem(icon: Icon(Icons.person), label: '내 정보'),
               ],
             ),
           ],

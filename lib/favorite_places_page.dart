@@ -37,7 +37,7 @@ class _FavoritePlacesPageState extends State<FavoritePlacesPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('즐겨찾는 경로'),
+        title: const Text('자주 사용한 경로'),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0.5,

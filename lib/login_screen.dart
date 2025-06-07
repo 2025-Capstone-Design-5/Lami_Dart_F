@@ -109,6 +109,20 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // 게스트로 로그인하는 함수 추가
+  void _continueAsGuest() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => const MainScreen(
+          userName: '게스트',
+          userEmail: 'guest@example.com',
+          initialIndex: 0,
+        ),
+      ),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -226,6 +240,35 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // 게스트로 계속하기 버튼 추가
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: OutlinedButton(
+                    onPressed: _continueAsGuest,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF1F1F1F),
+                      side: const BorderSide(
+                        color: Color(0xFFDADCE0),
+                        width: 1,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      '게스트로 계속하기',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF1F1F1F),
+                      ),
                     ),
                   ),
                 ),
