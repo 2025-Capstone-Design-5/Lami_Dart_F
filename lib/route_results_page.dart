@@ -218,16 +218,10 @@ class RouteResultsPage extends StatelessWidget {
                                             'arrivalTime': DateTime.now().toIso8601String(),
                                             'preparationTime': 0,
                                             'options': {},
-                                            'category': option.category,
-                                            'route': {
-                                              'summary': option.toJson(),
-                                              'detail': detailData.toJson(),
-                                              'cityCode': option.cityCode,
-                                              'busId': option.busId,
-                                              'departureStopId': option.departureStopId,
-                                              'linkIds': <String>[],
-                                              'sectionIds': <String>[],
-                                            },
+                                            // 서비스 카테고리: general, home, work, school 등
+                                            'category': 'general',
+                                            'summary': option.toJson(),
+                                            'detail': detailData.toJson(),
                                           };
                                           try {
                                             final saveResp = await http.post(

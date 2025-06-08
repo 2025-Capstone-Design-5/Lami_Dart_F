@@ -31,6 +31,8 @@ class _AssistantPageState extends State<AssistantPage> {
   String? _googleId; // 실제 Google ID 저장
   final List<_ChatMessage> _messages = [];
   final ScrollController _scrollController = ScrollController();
+  // 저장 시 사용할 사용자 지정 카테고리 (general, home, work, school 등)
+  String _selectedCategory = 'general';
 
   @override
   void initState() {
@@ -167,6 +169,20 @@ class _AssistantPageState extends State<AssistantPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // 사용자 카테고리 선택 드롭다운
+                  DropdownButton<String>(
+                    value: _selectedCategory,
+                    items: const [
+                      DropdownMenuItem(value: 'general', child: Text('General')),
+                      DropdownMenuItem(value: 'home', child: Text('집')),
+                      DropdownMenuItem(value: 'work', child: Text('직장')),
+                      DropdownMenuItem(value: 'school', child: Text('학교')),
+                    ],
+                    onChanged: (val) => setState(() {
+                      _selectedCategory = val!;
+                    }),
+                  ),
+                  const SizedBox(height: 8),
                   RouteDetailWidget(detail: detail),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
@@ -190,7 +206,8 @@ class _AssistantPageState extends State<AssistantPage> {
                         'arrivalTime': DateTime.now().toIso8601String(),
                         'preparationTime': 0,
                         'options': {},
-                        'category': 'general',
+                        // 서버에 저장할 실제 서비스 카테고리
+                        'category': _selectedCategory,
                         'summary': detail.toJson(),
                         'detail': detail.toJson(),
                       };
