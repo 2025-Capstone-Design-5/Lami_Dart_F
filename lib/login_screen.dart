@@ -9,6 +9,7 @@ import 'mypage.dart'; // MyPage import 추가
 import 'package:flutter/foundation.dart';  // for kIsWeb
 import 'dart:io' show Platform;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -50,6 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final redirectUri = dotenv.env['REDIRECT_URI']!;
     final callbackScheme = redirectUri.split(':').first;
 
+    print('Starting Google login');
     // 6) 인증 URL 생성
     final authUrl = Uri.https(
       'accounts.google.com',
@@ -67,12 +69,27 @@ class _LoginScreenState extends State<LoginScreen> {
       },
     ).toString();
 
+    // Debug: log redirect settings
+    print('Redirect URI (env): $redirectUri');
+    print('Callback scheme: $callbackScheme');
     // 7) 외부 브라우저에서 인증 → deep link 수신
-    final result = await FlutterWebAuth2.authenticate(
-      url: authUrl,
-      callbackUrlScheme: callbackScheme,
-    );
+    String result;
+    try {
+      result = await FlutterWebAuth2.authenticate(
+        url: authUrl,
+        callbackUrlScheme: callbackScheme,
+      );
+      // Debug: log raw authentication result
+      print('Authentication result (raw): $result');
+    } catch (e) {
+      // Debug: log error during authentication
+      print('Error during FlutterWebAuth2.authenticate: $e');
+      rethrow;
+    }
     final uri = Uri.parse(result);
+    // Debug: log parsed URI and parameters
+    print('Parsed callback URI: $uri');
+    print('Query parameters: ${uri.queryParameters}');
     // CSRF 검증
     if (uri.queryParameters['state'] != state) {
       throw Exception('Invalid state');
@@ -80,7 +97,11 @@ class _LoginScreenState extends State<LoginScreen> {
     final code = uri.queryParameters['code']!;
     
     // 8) 서버로 code+codeVerifier 전송
-    final serverBaseUrl = dotenv.env['SERVER_BASE_URL']!;
+    final serverBaseUrl = Platform.isAndroid
+        ? (dotenv.env['SERVER_BASE_URL_ANDROID'] ?? dotenv.env['SERVER_BASE_URL']!)
+        : Platform.isIOS
+            ? (dotenv.env['SERVER_BASE_URL_IOS'] ?? dotenv.env['SERVER_BASE_URL']!)
+            : dotenv.env['SERVER_BASE_URL']!;
     final resp = await http.post(
       Uri.parse('$serverBaseUrl/auth/google/code'),
       headers: {'Content-Type': 'application/json'},
@@ -94,7 +115,12 @@ class _LoginScreenState extends State<LoginScreen> {
       throw Exception('Token exchange failed: ${resp.body}');
     }
     final data = jsonDecode(resp.body)['data'];
-    // TODO: 받은 data['access_token'], data['refresh_token'], data['id_token'] 저장 및 사용자 처리
+    print('Google login tokens: $data');
+    // Save googleId for future API calls
+    final idTokenPayload = data['idToken'] as Map<String, dynamic>;
+    final googleId = idTokenPayload['sub'] as String;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('googleId', googleId);
 
     // 로그인 성공 후 홈 화면으로 이동 (이전 스택 제거)
     Navigator.of(context).pushAndRemoveUntil(
@@ -110,12 +136,27 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // 게스트로 로그인하는 함수 추가
-  void _continueAsGuest() {
+  Future<void> _continueAsGuest() async {
+    print('Starting guest login');
+    final serverBaseUrl = Platform.isAndroid
+        ? (dotenv.env['SERVER_BASE_URL_ANDROID'] ?? dotenv.env['SERVER_BASE_URL']!)
+        : Platform.isIOS
+            ? (dotenv.env['SERVER_BASE_URL_IOS'] ?? dotenv.env['SERVER_BASE_URL']!)
+            : dotenv.env['SERVER_BASE_URL']!;
+    final resp = await http.post(
+      Uri.parse('$serverBaseUrl/auth/guest'),
+      headers: {'Content-Type': 'application/json'},
+    );
+    if (resp.statusCode != 200) {
+      throw Exception('Guest login failed: ${resp.body}');
+    }
+    final user = jsonDecode(resp.body)['data'];
+    print('Guest login successful: $user');
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
-        builder: (_) => const MainScreen(
-          userName: '게스트',
-          userEmail: 'guest@example.com',
+        builder: (_) => MainScreen(
+          userName: user['name'] ?? '게스트',
+          userEmail: user['email'] ?? '',
           initialIndex: 0,
         ),
       ),

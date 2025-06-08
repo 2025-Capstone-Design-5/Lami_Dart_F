@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'event_service.dart';
 import 'dart:convert';
 import 'route_store.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// RouteResultsPage: SummaryData를 받아 여러 경로 옵션을 탭별로 보여주는 페이지
 class RouteResultsPage extends StatelessWidget {
@@ -206,12 +207,31 @@ class RouteResultsPage extends StatelessWidget {
                                           final detailData = RouteDetailResponse.parse(detailResp.body).data;
                                           RouteStore.selectedOption = detailData;
 
-                                          // 서버에 선택된 경로 저장
-                                          final saveUrl = Uri.parse('$baseUrl/traffic/routes/save');
-                                          final savePayload = option.toJson();
+                                          // Load stored Google ID for identifying the user
+                                          final prefs = await SharedPreferences.getInstance();
+                                          final googleId = prefs.getString('googleId') ?? '';
+                                          // Construct payload matching backend SavedRoute schema
+                                          final savePayload = {
+                                            'googleId': googleId,
+                                            'origin': summaryData.origin,
+                                            'destination': summaryData.destination,
+                                            'arrivalTime': DateTime.now().toIso8601String(),
+                                            'preparationTime': 0,
+                                            'options': {},
+                                            'category': option.category,
+                                            'route': {
+                                              'summary': option.toJson(),
+                                              'detail': detailData.toJson(),
+                                              'cityCode': option.cityCode,
+                                              'busId': option.busId,
+                                              'departureStopId': option.departureStopId,
+                                              'linkIds': <String>[],
+                                              'sectionIds': <String>[],
+                                            },
+                                          };
                                           try {
                                             final saveResp = await http.post(
-                                              saveUrl,
+                                              Uri.parse('$baseUrl/traffic/routes/save'),
                                               headers: {'Content-Type': 'application/json'},
                                               body: jsonEncode(savePayload),
                                             );
