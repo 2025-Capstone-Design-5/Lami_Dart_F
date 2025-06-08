@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'favorite_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'services/favorite_api_service.dart';
+import 'models/favorite_route_model.dart';
 import 'arrivemappage.dart';
 
 class FavoriteManagementPage extends StatefulWidget {
@@ -10,25 +12,38 @@ class FavoriteManagementPage extends StatefulWidget {
 }
 
 class _FavoriteManagementPageState extends State<FavoriteManagementPage> {
-  final FavoriteService _favoriteService = FavoriteService();
-  List<Map<String, dynamic>> favoriteList = [];
+  late final FavoriteApiService _apiService;
+  List<FavoriteRouteModel> favoriteList = [];
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
-    _favoriteService.addListener(_loadData);
+    _initFavorites();
   }
 
   @override
   void dispose() {
-    _favoriteService.removeListener(_loadData);
     super.dispose();
   }
 
-  void _loadData() {
-    favoriteList = _favoriteService.getFavoriteList();
-    setState(() {});
+  Future<void> _initFavorites() async {
+    final prefs = await SharedPreferences.getInstance();
+    final googleId = prefs.getString('googleId') ?? '';
+    _apiService = FavoriteApiService(googleId: googleId);
+    await _loadFavorites();
+  }
+
+  Future<void> _loadFavorites() async {
+    setState(() { _loading = true; });
+    try {
+      final list = await _apiService.getFavorites();
+      setState(() { favoriteList = list; });
+    } catch (e) {
+      print('즐겨찾기 불러오기 오류: $e');
+    } finally {
+      setState(() { _loading = false; });
+    }
   }
 
   @override
@@ -82,18 +97,17 @@ class _FavoriteManagementPageState extends State<FavoriteManagementPage> {
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: favoriteList.isEmpty
-                  ? _buildEmptyState()
-                  : ReorderableListView.builder(
-                      itemCount: favoriteList.length,
-                      onReorder: (oldIndex, newIndex) {
-                        _favoriteService.reorderFavorites(oldIndex, newIndex);
-                      },
-                      itemBuilder: (context, index) {
-                        final favorite = favoriteList[index];
-                        return _buildFavoriteCard(favorite, index);
-                      },
-                    ),
+              child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : (favoriteList.isEmpty
+                    ? _buildEmptyState()
+                    : ListView.builder(
+                        itemCount: favoriteList.length,
+                        itemBuilder: (context, index) {
+                          final fav = favoriteList[index];
+                          return _buildFavoriteCard(fav, index);
+                        },
+                      )),
             ),
           ],
         ),
@@ -148,9 +162,9 @@ class _FavoriteManagementPageState extends State<FavoriteManagementPage> {
     );
   }
 
-  Widget _buildFavoriteCard(Map<String, dynamic> favorite, int index) {
+  Widget _buildFavoriteCard(FavoriteRouteModel favorite, int index) {
     return Card(
-      key: ValueKey(favorite['name']),
+      key: ValueKey(favorite.id),
       margin: const EdgeInsets.only(bottom: 8),
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -158,22 +172,18 @@ class _FavoriteManagementPageState extends State<FavoriteManagementPage> {
       ),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: _getIconColor(favorite['icon']),
-          child: Icon(
-            _getIconData(favorite['icon']),
-            color: Colors.white,
-            size: 20,
-          ),
+          child: Icon(Icons.place, color: Colors.white),
+          backgroundColor: Colors.blue,
         ),
         title: Text(
-          favorite['name'],
+          '${favorite.origin} → ${favorite.destination}',
           style: const TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 16,
           ),
         ),
         subtitle: Text(
-          favorite['address'].isEmpty ? '주소 미설정' : favorite['address'],
+          '카테고리: ${favorite.category}',
           style: TextStyle(
             color: Colors.grey[600],
             fontSize: 14,
@@ -183,211 +193,68 @@ class _FavoriteManagementPageState extends State<FavoriteManagementPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: const Icon(Icons.edit, color: Colors.blue),
-              onPressed: () => _showEditFavoriteDialog(favorite),
-            ),
-            IconButton(
               icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: () => _showDeleteConfirmDialog(favorite['name']),
+              onPressed: () async {
+                await _apiService.removeFavorite(favorite.id);
+                await _loadFavorites();
+              },
             ),
             const Icon(Icons.drag_handle, color: Colors.grey),
           ],
         ),
-        onTap: () => _selectFavoriteAsDestination(favorite),
+        onTap: () => _selectFavoriteAsDestination({
+          'origin': favorite.origin,
+          'destination': favorite.destination,
+        }),
       ),
     );
-  }
-
-  IconData _getIconData(String iconName) {
-    switch (iconName) {
-      case 'home':
-        return Icons.home;
-      case 'work':
-        return Icons.work;
-      case 'school':
-        return Icons.school;
-      case 'restaurant':
-        return Icons.restaurant;
-      case 'shopping':
-        return Icons.shopping_cart;
-      case 'hospital':
-        return Icons.local_hospital;
-      case 'gas_station':
-        return Icons.local_gas_station;
-      default:
-        return Icons.place;
-    }
-  }
-
-  Color _getIconColor(String iconName) {
-    switch (iconName) {
-      case 'home':
-        return Colors.green;
-      case 'work':
-        return Colors.blue;
-      case 'school':
-        return Colors.orange;
-      case 'restaurant':
-        return Colors.red;
-      case 'shopping':
-        return Colors.purple;
-      case 'hospital':
-        return Colors.pink;
-      case 'gas_station':
-        return Colors.brown;
-      default:
-        return Colors.grey;
-    }
   }
 
   void _showAddFavoriteDialog() {
-    _showFavoriteDialog();
-  }
-
-  void _showEditFavoriteDialog(Map<String, dynamic> favorite) {
-    _showFavoriteDialog(
-      isEdit: true,
-      initialName: favorite['name'],
-      initialAddress: favorite['address'],
-      initialIcon: favorite['icon'],
-    );
-  }
-
-  void _showFavoriteDialog({
-    bool isEdit = false,
-    String? initialName,
-    String? initialAddress,
-    String? initialIcon,
-  }) {
-    final nameController = TextEditingController(text: initialName ?? '');
-    final addressController = TextEditingController(text: initialAddress ?? '');
-    String selectedIcon = initialIcon ?? 'place';
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(isEdit ? '즐겨찾기 수정' : '즐겨찾기 추가'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: '장소 이름',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: addressController,
-                decoration: InputDecoration(
-                  labelText: '주소',
-                  border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.search),
-                    onPressed: () async {
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const ArriveMapPage(),
-                        ),
-                      );
-                      if (result != null) {
-                        addressController.text = result['address'] ?? '';
-                        if (nameController.text.isEmpty) {
-                          nameController.text = result['name'] ?? '';
-                        }
-                      }
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text('아이콘 선택'),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: [
-                  'home', 'work', 'school', 'restaurant', 'shopping', 
-                  'hospital', 'gas_station', 'place'
-                ].map((icon) => GestureDetector(
-                  onTap: () {
-                    setDialogState(() {
-                      selectedIcon = icon;
-                    });
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: selectedIcon == icon 
-                          ? _getIconColor(icon).withOpacity(0.3)
-                          : Colors.grey[200],
-                      borderRadius: BorderRadius.circular(8),
-                      border: selectedIcon == icon
-                          ? Border.all(color: _getIconColor(icon), width: 2)
-                          : null,
-                    ),
-                    child: Icon(
-                      _getIconData(icon),
-                      color: _getIconColor(icon),
-                    ),
-                  ),
-                )).toList(),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('취소'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (nameController.text.isNotEmpty) {
-                  if (isEdit) {
-                    await _favoriteService.updateFavorite(
-                      oldName: initialName!,
-                      newName: nameController.text,
-                      newAddress: addressController.text,
-                      newIcon: selectedIcon,
-                    );
-                  } else {
-                    await _favoriteService.addFavorite(
-                      name: nameController.text,
-                      address: addressController.text,
-                      icon: selectedIcon,
-                    );
-                  }
-                  Navigator.pop(context);
-                }
-              },
-              child: Text(isEdit ? '수정' : '추가'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showDeleteConfirmDialog(String name) {
+    String origin = '';
+    String destination = '';
+    String category = 'general';
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('즐겨찾기 삭제'),
-        content: Text('"$name"을(를) 즐겨찾기에서 삭제하시겠습니까?'),
+        title: const Text('즐겨찾기 추가'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              decoration: const InputDecoration(labelText: '출발지'),
+              onChanged: (v) => origin = v,
+            ),
+            TextField(
+              decoration: const InputDecoration(labelText: '목적지'),
+              onChanged: (v) => destination = v,
+            ),
+            const SizedBox(height: 8),
+            DropdownButton<String>(
+              value: category,
+              items: const [
+                DropdownMenuItem(value: 'general', child: Text('General')),
+                DropdownMenuItem(value: 'home', child: Text('집')),
+                DropdownMenuItem(value: 'work', child: Text('직장')),
+                DropdownMenuItem(value: 'school', child: Text('학교')),
+              ],
+              onChanged: (v) => category = v!,
+            ),
+          ],
+        ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
           ElevatedButton(
-            onPressed: () {
-              _favoriteService.removeFavorite(name);
+            onPressed: () async {
               Navigator.pop(context);
+              await _apiService.addFavorite(
+                origin: origin,
+                destination: destination,
+                category: category,
+              );
+              await _loadFavorites();
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('삭제', style: TextStyle(color: Colors.white)),
+            child: const Text('추가'),
           ),
         ],
       ),
@@ -399,8 +266,8 @@ class _FavoriteManagementPageState extends State<FavoriteManagementPage> {
       context,
       MaterialPageRoute(
         builder: (context) => ArriveMapPage(
-          initialDestination: favorite['name'],
-          initialDestinationAddress: favorite['address'],
+          initialDestination: favorite['destination'],
+          initialDestinationAddress: favorite['destination'],
         ),
       ),
     );

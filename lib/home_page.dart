@@ -17,6 +17,7 @@ import 'route_store.dart';
 import 'package:untitled4/models/route_response.dart';
 import 'favorite_service.dart';
 import 'favorite_management_page.dart';
+import 'models/favorite_route_model.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -507,8 +508,8 @@ class _HomePageState extends State<HomePage> {
     // 오늘의 일정 가져오기
     final todayEvents = _eventService.getEvents(today);
     
-    // 상위 3개 즐겨찾기 가져오기
-    final topFavorites = _favoriteService.getTopFavorites();
+    // 상위 3개 즐겨찾기 가져오기 (메인 페이지용)
+    final List<FavoriteRouteModel> topFavorites = _favoriteService.getTopFavorites();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3EFEE),
@@ -921,67 +922,54 @@ class _HomePageState extends State<HomePage> {
                                   color: Colors.blue.shade50,
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(color: Colors.blue.shade200),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.event,
+                                      color: Colors.blue,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        event.title ?? event.content ?? '제목 없음', // title이 있으면 title, 없으면 content 사용
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.black87,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (event.time != null && event.time!.isNotEmpty) // time 속성 사용
+                                      Text(
+                                        event.time!,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.black54,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                    ],
+                  ),
+                ),
               ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.event,
-                    color: Colors.blue,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      event.title ?? event.content ?? '제목 없음', // title이 있으면 title, 없으면 content 사용
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.black87,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (event.time != null && event.time!.isNotEmpty) // time 속성 사용
-                    Text(
-                      event.time!,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.black54,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          );
-        },
-                          ),
-                      ],
-                    ),
-                  ),
-      ),
-      if (todayEvents.length > 3)
-        Padding(
-          padding: const EdgeInsets.only(top: 8.0),
-          child: Text(
-            '외 ${todayEvents.length - 3}개 일정 더보기',
-            style: const TextStyle(
-              fontSize: 13,
-              color: Colors.blue,
-              fontWeight: FontWeight.w500,
-            ),
-            textAlign: TextAlign.center,
+            ],
           ),
         ),
-    ],
-    ),
-    ),
-    ),
+      ),
     ),
     );
   }
 
   // 즐겨찾기 아이콘 위젯
-  Widget _buildFavoriteIcons(List<Map<String, dynamic>> favorites) {
+  Widget _buildFavoriteIcons(List<FavoriteRouteModel> favorites) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
       decoration: BoxDecoration(
@@ -1001,7 +989,7 @@ class _HomePageState extends State<HomePage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                '즐겨찾는 장소',
+                '즐겨찾는 경로',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -1015,7 +1003,7 @@ class _HomePageState extends State<HomePage> {
                     MaterialPageRoute(
                       builder: (context) => const FavoriteManagementPage(),
                     ),
-                  );
+                  ).then((_) => _favoriteService.loadData());
                 },
                 child: Text(
                   '관리',
@@ -1029,36 +1017,37 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
           const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: favorites.isEmpty
-                ? [
-                    _buildEmptyFavoriteIcon(),
-                    _buildEmptyFavoriteIcon(),
-                    _buildEmptyFavoriteIcon(),
-                  ]
-                : [
-                    for (int i = 0; i < 3; i++)
-                      i < favorites.length
-                          ? _buildFavoriteIcon(favorites[i])
-                          : _buildEmptyFavoriteIcon(),
-                  ],
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: favorites.isEmpty
+                  ? [ _buildEmptyFavoriteIcon() ]
+                  : [
+                      ...favorites.map((f) => Padding(
+                        padding: const EdgeInsets.only(right: 16.0),
+                        child: _buildFavoriteIcon(f),
+                      )),
+                      _buildEmptyFavoriteIcon(),
+                    ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  // 즐겨찾기 아이콘
-  Widget _buildFavoriteIcon(Map<String, dynamic> favorite) {
+  // 즐겨찾기 경로 아이콘
+  Widget _buildFavoriteIcon(FavoriteRouteModel favorite) {
+    final iconData = _getFavoriteIconData(favorite.category);
+    final iconColor = _getFavoriteIconColor(favorite.category);
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => ArriveMapPage(
-              initialDestination: favorite['name'],
-              initialDestinationAddress: favorite['address'],
+              initialDestination: favorite.destination,
+              initialDestinationAddress: favorite.destination,
             ),
           ),
         );
@@ -1069,25 +1058,27 @@ class _HomePageState extends State<HomePage> {
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: _getFavoriteIconColor(favorite['icon']),
+              color: iconColor,
               borderRadius: BorderRadius.circular(30),
               boxShadow: [
                 BoxShadow(
-                  color: _getFavoriteIconColor(favorite['icon']).withOpacity(0.3),
+                  color: iconColor.withOpacity(0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
               ],
             ),
-            child: Icon(
-              _getFavoriteIconData(favorite['icon']),
-              color: Colors.white,
-              size: 28,
+            child: Center(
+              child: Icon(
+                iconData,
+                color: Colors.white,
+                size: 28,
+              ),
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            favorite['name'],
+            _getCategoryLabel(favorite.category),
             style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
@@ -1110,7 +1101,7 @@ class _HomePageState extends State<HomePage> {
           MaterialPageRoute(
             builder: (context) => const FavoriteManagementPage(),
           ),
-        );
+        ).then((_) => _favoriteService.loadData());
       },
       child: Column(
         children: [
@@ -1171,6 +1162,21 @@ class _HomePageState extends State<HomePage> {
       case 'hospital': return Colors.pink;
       case 'gas_station': return Colors.brown;
       default: return Colors.grey;
+    }
+  }
+
+  // 즐겨찾기 카테고리 레이블 (한글)
+  String _getCategoryLabel(String category) {
+    switch (category) {
+      case 'general': return '일반';
+      case 'home': return '집';
+      case 'work': return '직장';
+      case 'school': return '학교';
+      case 'restaurant': return '식당';
+      case 'shopping': return '쇼핑';
+      case 'hospital': return '병원';
+      case 'gas_station': return '주유소';
+      default: return category;
     }
   }
 
