@@ -190,7 +190,7 @@ class _AssistantPageState extends State<AssistantPage> {
                         'arrivalTime': DateTime.now().toIso8601String(),
                         'preparationTime': 0,
                         'options': {},
-                        'category': category,
+                        'category': 'general',
                         'summary': detail.toJson(),
                         'detail': detail.toJson(),
                       };
