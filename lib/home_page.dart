@@ -18,6 +18,7 @@ import 'package:untitled4/models/route_response.dart';
 import 'favorite_service.dart';
 import 'favorite_management_page.dart';
 import 'models/favorite_route_model.dart';
+import 'services/alarm_api_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -32,6 +33,8 @@ class _HomePageState extends State<HomePage> {
   // 이벤트 서비스 인스턴스
   final EventService _eventService = EventService();
   final FavoriteService _favoriteService = FavoriteService();
+  late final AlarmApiService _alarmApiService;
+  String? _googleId;
 
   // 준비 시간 관련 변수
   Duration preparationTime = const Duration(minutes: 30); // 기본값 30분
@@ -62,6 +65,14 @@ class _HomePageState extends State<HomePage> {
     _eventService.addListener(_refreshState);
     _favoriteService.loadData();
     _favoriteService.addListener(_refreshState);
+    _initAlarmApiService();
+  }
+
+  Future<void> _initAlarmApiService() async {
+    final prefs = await SharedPreferences.getInstance();
+    final googleId = prefs.getString('googleId') ?? '';
+    setState(() { _googleId = googleId; });
+    _alarmApiService = AlarmApiService(googleId: googleId);
   }
 
   // 알람 초기화
@@ -101,10 +112,27 @@ class _HomePageState extends State<HomePage> {
   }
 
   // 알람예정시간 스케줄 시작
-  void _startAlarmSchedule() {
+  Future<void> _startAlarmSchedule() async {
     // 기존 타이머들 취소
     alarmCheckTimer?.cancel();
     countdownTimer?.cancel();
+
+    // 서버에 알람 등록
+    try {
+      // arrivalDateTime 계산 (서버 계산에도 참고용)
+      final now = DateTime.now();
+      var hour24 = arrivalHour;
+      if (arrivalPeriod == '오후' && arrivalHour != 12) hour24 += 12;
+      else if (arrivalPeriod == '오전' && arrivalHour == 12) hour24 = 0;
+      var arrivalDateTime = DateTime(now.year, now.month, now.day, hour24, arrivalMinute);
+      if (arrivalDateTime.isBefore(now)) arrivalDateTime = arrivalDateTime.add(const Duration(days: 1));
+      await _alarmApiService.registerAlarm(
+        arrivalTime: arrivalDateTime.toIso8601String(),
+        preparationTime: preparationTime.inMinutes,
+      );
+    } catch (e) {
+      print('알람 서버 등록 실패: $e');
+    }
 
     setState(() {
       isAlarmScheduleActive = true;
