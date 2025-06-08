@@ -1,4 +1,22 @@
+import 'dart:io';
+import 'dart:convert';
+import 'dart:ui';
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'services/agent_service.dart';
+import 'models/summary_response.dart';
+import 'route_results_page.dart';
+import 'widgets/category_main_widget.dart';
+import 'widgets/summary_chat_widget.dart';
+import 'models/route_response.dart';
+import 'models/route_detail.dart';
+import 'widgets/route_detail_widget.dart';
+import 'widgets/typing_indicator.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'route_detail_page.dart';
+import 'main.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AssistantPage extends StatefulWidget {
   const AssistantPage({Key? key}) : super(key: key);
@@ -9,100 +27,367 @@ class AssistantPage extends StatefulWidget {
 
 class _AssistantPageState extends State<AssistantPage> {
   final TextEditingController _controller = TextEditingController();
+  final AgentService _agentService = AgentService();
+  String? _googleId; // 실제 Google ID 저장
   final List<_ChatMessage> _messages = [];
+  final ScrollController _scrollController = ScrollController();
 
-  void _sendMessage(String text) {
+  @override
+  void initState() {
+    super.initState();
+    _loadGoogleId();
+  }
+
+  Future<void> _loadGoogleId() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _googleId = prefs.getString('googleId');
+    });
+  }
+
+  Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty) return;
+    // Ensure googleId is loaded
+    if (_googleId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('로그인 정보가 로드되지 않았습니다.')), 
+      );
+      return;
+    }
+    final userId = _googleId!;
     setState(() {
       _messages.add(_ChatMessage(text: text, isUser: true));
-      // AI 응답 예시 (실제 AI 연동 시 비동기 처리 필요)
-      _messages.add(_ChatMessage(text: 'AI의 답변: $text', isUser: false));
+      // Show typing indicator
+      _messages.add(_ChatMessage(isUser: false, isTyping: true, text: ''));
     });
     _controller.clear();
+    try {
+      await for (final event in _agentService.streamProcess(
+        userId: userId,
+        message: text,
+      )) {
+        // Log received event to console
+        print('AssistantPage SSE event: $event');
+        // Remove typing indicator on first event
+        if (_messages.any((m) => m.isTyping == true)) {
+          setState(() {
+            _messages.removeWhere((m) => m.isTyping == true);
+          });
+        }
+        // Try parse JSON for route detail and summary
+        try {
+          final decoded = json.decode(event);
+          if (decoded is Map<String, dynamic> && decoded.containsKey('main')) {
+            final resp = RouteDetailResponse.fromJson(decoded);
+            setState(() {
+              _messages.add(_ChatMessage(routeDetail: resp.main, isUser: false));
+            });
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _scrollController.animateTo(
+                _scrollController.position.maxScrollExtent,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
+            });
+            continue;
+          }
+          // Detect category summary JSON and display via CategoryMainWidget
+          if (decoded is Map<String, dynamic> && decoded.keys.any((k) => ['walk','bus','car','subway','bus_subway'].contains(k))) {
+            setState(() {
+              _messages.add(_ChatMessage(categoryData: decoded, isUser: false));
+            });
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _scrollController.animateTo(
+                _scrollController.position.maxScrollExtent,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
+            });
+            continue;
+          }
+        } catch (_) {}
+        // Fallback: raw text event
+        setState(() {
+          _messages.add(_ChatMessage(text: event, isUser: false));
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final maxExtent = _scrollController.position.maxScrollExtent;
+          _scrollController.animateTo(
+            maxExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        });
+      }
+      return;
+    } catch (e) {
+      // Log streaming error to console
+      print('AssistantPage streaming error: $e');
+      setState(() {
+        _messages.add(_ChatMessage(text: '오류: $e', isUser: false));
+      });
+    }
+  }
+
+  /// Traffic 컨트롤러 캐시에서 상세 경로를 가져와 모달로 보여줍니다.
+  Future<void> _fetchDetail(String category, int index) async {
+    final baseUrl = dotenv.env['BACKEND_URL'] ?? 'http://localhost:3000';
+    final uri = Uri.parse('$baseUrl/agent/detail');
+    if (_googleId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('로그인 정보가 로드되지 않았습니다.')), 
+      );
+      return;
+    }
+    final userId = _googleId!;
+    print('[AssistantPage] fetchDetail 요청: userId=$userId, category=$category, index=$index');
+    try {
+      final resp = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'category': category,
+          'index': index,
+          'userId': userId,
+        }),
+      );
+      print('[AssistantPage] fetchDetail 응답: status=${resp.statusCode}, body=${resp.body}');
+      if (resp.statusCode >= 200 && resp.statusCode < 300) {
+        // Parse the 'main' object from the detail response
+        final Map<String, dynamic> decoded = json.decode(resp.body) as Map<String, dynamic>;
+        final mainJson = decoded['main'] as Map<String, dynamic>;
+        final detail = RouteDetail.fromJson(mainJson);
+        // Show a simple detail modal with RouteDetailWidget
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          builder: (context) {
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RouteDetailWidget(detail: detail),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.save),
+                    label: const Text('경로 저장'),
+                    onPressed: () async {
+                      if (_googleId == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('로그인 정보가 로드되지 않았습니다.')), 
+                        );
+                        return;
+                      }
+                      final userId = _googleId!;
+                      final baseUrl = dotenv.env['BACKEND_URL'] ?? 'http://localhost:3000';
+                      final saveUri = Uri.parse('$baseUrl/traffic/routes/save');
+                      // Prepare payload
+                      final payload = {
+                        'googleId': userId,
+                        'origin': detail.origin,
+                        'destination': detail.destination,
+                        'arrivalTime': DateTime.now().toIso8601String(),
+                        'preparationTime': 0,
+                        'options': {},
+                        'category': category,
+                        'summary': detail.toJson(),
+                        'detail': detail.toJson(),
+                      };
+                      // Log request
+                      print('[AssistantPage] saveRoute request: uri=$saveUri, payload=${jsonEncode(payload)}');
+                      try {
+                        final saveResp = await http.post(
+                          saveUri,
+                          headers: {'Content-Type': 'application/json'},
+                          body: jsonEncode(payload),
+                        );
+                        // Log response
+                        print('[AssistantPage] saveRoute response: status=${saveResp.statusCode}, body=${saveResp.body}');
+                        if (saveResp.statusCode >= 200 && saveResp.statusCode < 300) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('경로가 저장되었습니다!')),
+                          );
+                          // Close detail modal and return to Home tab
+                          Navigator.of(context).pop();
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(
+                              builder: (_) => const MainScreen(initialIndex: 0),
+                            ),
+                            (route) => false,
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('저장 실패: ${saveResp.body}')),
+                          );
+                        }
+                      } catch (e) {
+                        // Log error
+                        print('[AssistantPage] saveRoute error: $e');
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('저장 오류: $e')),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      }
+    } catch (e) {
+      print('[AssistantPage] fetchDetail 오류: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Lami Chatbot'),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-        titleTextStyle: const TextStyle(
-          color: Colors.black,
-          fontWeight: FontWeight.w600,
-          fontSize: 20,
-        ),
-        iconTheme: const IconThemeData(color: Colors.black),
-      ),
-      backgroundColor: const Color(0xFFF3EFEE),
-      body: Column(
+      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.transparent,
+      body: Stack(
         children: [
-          const SizedBox(height: 16),
-          const Icon(Icons.smart_toy, size: 60, color: Colors.blue),
-          const SizedBox(height: 8),
-          const Text(
-            'Lami',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            '궁금한 점을 물어보세요!\n여행, 일정, 교통 등 다양한 정보를 도와드릴 수 있습니다.',
-            style: TextStyle(fontSize: 15, color: Colors.black54),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final msg = _messages[index];
-                return Align(
-                  alignment: msg.isUser ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: msg.isUser ? Colors.blue[100] : Colors.grey[200],
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Text(
-                      msg.text,
-                      style: TextStyle(
-                        color: Colors.black87,
-                        fontSize: 16,
-                        fontWeight: msg.isUser ? FontWeight.w500 : FontWeight.normal,
-                      ),
-                    ),
-                  ),
-                );
-              },
+          // Background gradient
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF2C3E50), Color(0xFF34495E)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Row(
+          SafeArea(
+            child: Column(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    decoration: InputDecoration(
-                      hintText: '메시지를 입력하세요',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
+                // Header
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    'Lami',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      shadows: [Shadow(color: Colors.black26, blurRadius: 4)],
                     ),
-                    onSubmitted: _sendMessage,
                   ),
                 ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.send, color: Colors.blue),
-                  onPressed: () => _sendMessage(_controller.text),
+                // Chat messages
+                Expanded(
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    itemCount: _messages.length,
+                    itemBuilder: (context, index) {
+                      final msg = _messages[index];
+                      // Determine bubble alignment
+                      final align = msg.isUser ? Alignment.centerRight : Alignment.centerLeft;
+                      // Bubble color
+                      final bgColor = Colors.white.withOpacity(0.2);
+                      // Content widget
+                      if (msg.isTyping == true) {
+                        // Typing cursor indicator
+                        return Align(
+                          alignment: Alignment.centerLeft,
+                          child: TypingIndicator(),
+                        );
+                      }
+                      final content = msg.summaryData != null
+                        ? SummaryChatWidget(summaryData: msg.summaryData!)
+                        : msg.categoryData != null
+                          ? CategoryMainWidget(
+                              data: msg.categoryData!,
+                              onDetailTap: (category, index) => _fetchDetail(category, index),
+                            )
+                          : msg.routeDetail != null
+                            ? RouteDetailWidget(detail: msg.routeDetail!)
+                            : (() {
+                                // Try to pretty-print JSON, else show raw text
+                                try {
+                                  final dynamic obj = json.decode(msg.text);
+                                  final pretty = JsonEncoder.withIndent('  ').convert(obj);
+                                  return SelectableText(
+                                    pretty,
+                                    style: TextStyle(
+                                      color: msg.isUser ? Colors.white : Colors.black87,
+                                      fontSize: 16,
+                                    ),
+                                  );
+                                } catch (_) {
+                                  return SelectableText(
+                                    msg.text,
+                                    style: TextStyle(
+                                      color: msg.isUser ? Colors.white : Colors.black87,
+                                      fontSize: 16,
+                                    ),
+                                  );
+                                }
+                              })();
+                      return Align(
+                        alignment: align,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(vertical: 6),
+                              padding: const EdgeInsets.all(16),
+                              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.35),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
+                              ),
+                              child: DefaultTextStyle(
+                                style: TextStyle(color: Colors.white, fontSize: 16),
+                                child: content,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                // Input field
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(30),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.4),
+                          borderRadius: BorderRadius.circular(30),
+                          border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _controller,
+                                style: TextStyle(color: Colors.white),
+                                decoration: InputDecoration(
+                                  hintText: '메시지를 입력하세요',
+                                  hintStyle: TextStyle(color: Colors.white70),
+                                  border: InputBorder.none,
+                                ),
+                                onSubmitted: _sendMessage,
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.send, color: Colors.white),
+                              onPressed: () => _sendMessage(_controller.text),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -116,5 +401,17 @@ class _AssistantPageState extends State<AssistantPage> {
 class _ChatMessage {
   final String text;
   final bool isUser;
-  _ChatMessage({required this.text, required this.isUser});
+  final bool isTyping;
+  final SummaryData? summaryData;
+  final Map<String, dynamic>? categoryData;
+  final RouteDetail? routeDetail;
+
+  _ChatMessage({
+    this.text = '',
+    this.summaryData,
+    this.categoryData,
+    this.routeDetail,
+    this.isTyping = false,
+    required this.isUser,
+  });
 }
