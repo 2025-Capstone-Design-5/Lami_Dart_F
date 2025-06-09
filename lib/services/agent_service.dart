@@ -2,10 +2,11 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../config/server_config.dart';
 
 class AgentService {
   // 백엔드 URL을 .env의 BACKEND_URL 또는 기본 localhost로 설정
-  static final _baseUrl = dotenv.env['BACKEND_URL'] ?? 'http://localhost:3000';
+  static final _baseUrl = getServerBaseUrl();
 
   /// 사용자 ID와 메시지를 보내고, 에이전트의 응답 문자열을 반환합니다.
   Future<String> processMessage({

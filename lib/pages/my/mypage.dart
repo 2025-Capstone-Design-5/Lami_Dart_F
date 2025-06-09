@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'settingspage.dart';
-import 'updatepage.dart';
 import 'favorite_places_page.dart';
-import 'login_screen.dart';
+import 'update_page.dart';
+import 'settings_page.dart';
+import '../auth/login_screen.dart';
 
 // StatelessWidget에서 StatefulWidget으로 변경
 class MyPage extends StatefulWidget {

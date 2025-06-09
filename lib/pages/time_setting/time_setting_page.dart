@@ -3,10 +3,11 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'event_service.dart'; // EventService import 추가
-import 'models/route_response.dart';
-import 'models/summary_response.dart';
-import 'route_results_page.dart'; // 경로 결과 페이지 import 추가
+import '../../event_service.dart'; // EventService import 추가
+import '../../models/route_response.dart';
+import '../../models/summary_response.dart';
+import '../route/route_results_page.dart'; // 경로 결과 페이지 import 추가
+import '../../config/server_config.dart';
 
 class TimeSettingPage extends StatefulWidget {
   final Function(Duration)? onPrepTimeSet;
@@ -435,7 +436,7 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
                   );
 
                   try {
-                      final serverBaseUrl = dotenv.env['SERVER_BASE_URL']!;
+                      final serverBaseUrl = getServerBaseUrl();
                       final int hour24 = _convertTo24Hour(arrivalPeriod, arrivalHour);
                       final String timeString = '${hour24.toString().padLeft(2, '0')}:${arrivalMinute.toString().padLeft(2, '0')}:00';
                       final String dateString = DateFormat('yyyy-MM-dd').format(arrivalDate);

@@ -3,19 +3,14 @@ import 'dart:io' show Platform;
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/favorite_route_model.dart';
+import '../config/server_config.dart';
 
 class FavoriteApiService {
   final String googleId;
   late final String baseUrl;
 
   FavoriteApiService({required this.googleId}) {
-    // Determine base URL with platform fallback
-    final defaultUrl = dotenv.env['BACKEND_URL'] ?? 'http://localhost:3000';
-    baseUrl = Platform.isAndroid
-        ? (dotenv.env['SERVER_BASE_URL_ANDROID'] ?? defaultUrl)
-        : Platform.isIOS
-            ? (dotenv.env['SERVER_BASE_URL_IOS'] ?? defaultUrl)
-            : defaultUrl;
+    baseUrl = getServerBaseUrl();
   }
 
   /// 즐겨찾기 목록을 가져옵니다.

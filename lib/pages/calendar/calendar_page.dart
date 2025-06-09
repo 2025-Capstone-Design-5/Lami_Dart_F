@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'event_service.dart';
+import '../../event_service.dart';
 // 일정 데이터 모델
 class Event {
   final String content;

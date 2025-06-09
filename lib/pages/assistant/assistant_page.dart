@@ -4,22 +4,23 @@ import 'dart:ui';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'services/agent_service.dart';
-import 'models/summary_response.dart';
-import 'route_results_page.dart';
-import 'widgets/category_main_widget.dart';
-import 'widgets/summary_chat_widget.dart';
-import 'models/route_response.dart';
-import 'models/route_detail.dart';
-import 'widgets/route_detail_widget.dart';
-import 'widgets/typing_indicator.dart';
+import '../../services/agent_service.dart';
+import '../../models/summary_response.dart';
+import '../route/route_results_page.dart';
+import '../../widgets/category_main_widget.dart';
+import '../../widgets/summary_chat_widget.dart';
+import '../../models/route_response.dart';
+import '../../models/route_detail.dart';
+import '../../widgets/route_detail_widget.dart';
+import '../../widgets/typing_indicator.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'route_detail_page.dart';
-import 'main.dart';
+import '../route/route_detail_page.dart';
+import '../../main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'widgets/favorite_list_widget.dart';
-import 'models/favorite_route_model.dart';
+import '../../widgets/favorite_list_widget.dart';
+import '../../models/favorite_route_model.dart';
+import '../../config/server_config.dart';
 
 class AssistantPage extends StatefulWidget {
   const AssistantPage({Key? key}) : super(key: key);
@@ -45,9 +46,12 @@ class _AssistantPageState extends State<AssistantPage> {
   void initState() {
     super.initState();
     _loadGoogleId();
-    // Initialize speech and TTS
+    // Instantiate speech recognizer
     _speech = stt.SpeechToText();
-    _initSpeech();
+    // Defer initialize until after first frame so Activity is attached
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initSpeech();
+    });
   }
 
   Future<void> _initSpeech() async {
@@ -175,7 +179,7 @@ class _AssistantPageState extends State<AssistantPage> {
 
   /// Traffic 컨트롤러 캐시에서 상세 경로를 가져와 모달로 보여줍니다.
   Future<void> _fetchDetail(String category, int index) async {
-    final baseUrl = dotenv.env['BACKEND_URL'] ?? 'http://localhost:3000';
+    final baseUrl = getServerBaseUrl();
     final uri = Uri.parse('$baseUrl/agent/detail');
     if (_googleId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -238,8 +242,7 @@ class _AssistantPageState extends State<AssistantPage> {
                         return;
                       }
                       final userId = _googleId!;
-                      final baseUrl = dotenv.env['BACKEND_URL'] ?? 'http://localhost:3000';
-                      final saveUri = Uri.parse('$baseUrl/traffic/routes/save');
+                      final saveUri = Uri.parse('${getServerBaseUrl()}/traffic/routes/save');
                       // Prepare payload
                       final payload = {
                         'googleId': userId,

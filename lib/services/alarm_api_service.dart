@@ -2,18 +2,14 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../config/server_config.dart';
 
 class AlarmApiService {
   final String googleId;
   late final String baseUrl;
 
   AlarmApiService({required this.googleId}) {
-    final defaultUrl = dotenv.env['BACKEND_URL'] ?? 'http://localhost:3000';
-    baseUrl = Platform.isAndroid
-        ? (dotenv.env['SERVER_BASE_URL_ANDROID'] ?? defaultUrl)
-        : Platform.isIOS
-            ? (dotenv.env['SERVER_BASE_URL_IOS'] ?? defaultUrl)
-            : defaultUrl;
+    baseUrl = getServerBaseUrl();
   }
 
   /// 서버에 알람을 등록합니다.
