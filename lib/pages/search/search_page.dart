@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'main.dart';
-import 'search_history_service.dart';
-import 'time_setting_page.dart';
-import 'tmap_service.dart';
-import 'favorite_service.dart';
+import '../../main.dart';
+import '../../search_history_service.dart';
+import '../time_setting/time_setting_page.dart';
+import '../../services/tmap_service.dart';
+import '../../favorite_service.dart';
 
-class ArriveMapPage extends StatefulWidget {
+class SearchPage extends StatefulWidget {
   final String? initialDeparture;
   final String? initialDepartureAddress;
   final String? initialDestination;
   final String? initialDestinationAddress;
   
-  const ArriveMapPage({
+  const SearchPage({
     Key? key,
     this.initialDeparture,
     this.initialDepartureAddress,
@@ -21,10 +21,10 @@ class ArriveMapPage extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<ArriveMapPage> createState() => _ArriveMapPageState();
+  State<SearchPage> createState() => _SearchPageState();
 }
 
-class _ArriveMapPageState extends State<ArriveMapPage> {
+class _SearchPageState extends State<SearchPage> {
   final TextEditingController _departureController = TextEditingController();
   final TextEditingController _destinationController = TextEditingController();
   final SearchHistoryService _searchHistoryService = SearchHistoryService();

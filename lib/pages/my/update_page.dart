@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'main.dart';
+import '../../main.dart';
 import 'update_detail_page.dart';
 
 class UpdatePage extends StatelessWidget {

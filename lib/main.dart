@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'home_page.dart';
-import 'calendar_page.dart';
-import 'assistant_page.dart';
-import 'mypage.dart';
-import 'splash_screen.dart'; // 스플래시 화면 import 추가
+import 'pages/home/home_page.dart';
+import 'pages/calendar/calendar_page.dart';
+import 'pages/assistant/assistant_page.dart';
+import 'pages/my/mypage.dart';
+import 'pages/auth/splash_screen.dart'; // 스플래시 화면 import 추가
 import 'dart:io';
-import 'favorite_management_page.dart';
 
 /// 앱 시작 전에 환경변수를 로드합니다
 Future<void> main() async {
@@ -36,9 +35,7 @@ class MyApp extends StatelessWidget {
       ),
       home: const SplashScreen(), // 시작점을 스플래시 화면으로 변경
       debugShowCheckedModeBanner: false,
-      routes: {
-        '/favorite_management': (context) => const FavoriteManagementPage(),
-      },
+      routes: {},
     );
   }
 }

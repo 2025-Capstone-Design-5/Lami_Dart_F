@@ -1,6 +1,6 @@
 name: untitled4
 description: "A new Flutter project."
-publish_to: 'none'
+publish_to: "none"
 
 version: 1.0.0+1
 
@@ -16,13 +16,14 @@ dependencies:
   intl: ^0.19.0
   shared_preferences: ^2.2.2
   # 알람 기능을 위한 패키지들 추가
-  audioplayers: ^5.2.1        # 소리 재생용
-  haptic_feedback: ^0.4.2     # 진동 효과용 (vibration 대체)
-  permission_handler: ^11.1.0  # 권한 관리용
-  wakelock_plus: ^1.2.1       # 화면 켜짐 유지용
-  flutter_local_notifications: ^17.2.2  # 로컬 알림용
-  flutter_web_auth_2: ^4.1.0  # OAuth 인증 (migrated)
-  crypto: ^3.0.1  # PKCE 생성
+  audioplayers: ^5.2.1 # 소리 재생용
+  haptic_feedback: ^0.4.2 # 진동 효과용 (vibration 대체)
+  permission_handler: ^11.1.0 # 권한 관리용
+  wakelock_plus: ^1.2.1 # 화면 켜짐 유지용
+  flutter_local_notifications: ^17.2.2 # 로컬 알림용
+  flutter_web_auth_2: ^4.1.0 # OAuth 인증 (migrated)
+  crypto: ^3.0.1 # PKCE 생성
+  speech_to_text: ^5.6.0 # STT (음성인식)
 
 dev_dependencies:
   flutter_test:
@@ -36,5 +37,5 @@ flutter:
   assets:
     - .env
     - assets/images/
-    - assets/sounds/  # 알람 소리 파일용 (선택사항)
-    - assets/signin-assets/  # 로그인 아이콘 등 추가 자산
+    - assets/sounds/ # 알람 소리 파일용 (선택사항)
+    - assets/signin-assets/ # 로그인 아이콘 등 추가 자산

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class DestinationSearchPage extends StatelessWidget {
-  const DestinationSearchPage({Key? key}) : super(key: key);
+class AddressSearchTemplatePage extends StatelessWidget {
+  const AddressSearchTemplatePage({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {

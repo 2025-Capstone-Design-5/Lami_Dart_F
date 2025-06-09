@@ -9,14 +9,16 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:http/http.dart' as http;
-import 'time_setting_page.dart';
-import 'arrivemappage.dart';
-import 'event_service.dart'; // EventService 불러오기
-import 'calendar_page.dart' hide EventService; // CalendarPage 불러오기
-import 'route_store.dart';
-import 'package:untitled4/models/route_response.dart';
-import 'favorite_service.dart';
-import 'favorite_management_page.dart';
+import '../time_setting/time_setting_page.dart';
+import '../search/search_page.dart';
+import '../../event_service.dart'; // EventService 불러오기
+import '../calendar/calendar_page.dart' hide EventService; // CalendarPage 불러오기
+import '../../route_store.dart';
+import '../../favorite_service.dart';
+import '../my/favorite_places_page.dart';
+import '../../services/alarm_api_service.dart';
+import '../../models/route_response.dart';
+import '../../models/favorite_route_model.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -31,6 +33,8 @@ class _HomePageState extends State<HomePage> {
   // 이벤트 서비스 인스턴스
   final EventService _eventService = EventService();
   final FavoriteService _favoriteService = FavoriteService();
+  late final AlarmApiService _alarmApiService;
+  String? _googleId;
 
   // 준비 시간 관련 변수
   Duration preparationTime = const Duration(minutes: 30); // 기본값 30분
@@ -61,6 +65,14 @@ class _HomePageState extends State<HomePage> {
     _eventService.addListener(_refreshState);
     _favoriteService.loadData();
     _favoriteService.addListener(_refreshState);
+    _initAlarmApiService();
+  }
+
+  Future<void> _initAlarmApiService() async {
+    final prefs = await SharedPreferences.getInstance();
+    final googleId = prefs.getString('googleId') ?? '';
+    setState(() { _googleId = googleId; });
+    _alarmApiService = AlarmApiService(googleId: googleId);
   }
 
   // 알람 초기화
@@ -100,10 +112,27 @@ class _HomePageState extends State<HomePage> {
   }
 
   // 알람예정시간 스케줄 시작
-  void _startAlarmSchedule() {
+  Future<void> _startAlarmSchedule() async {
     // 기존 타이머들 취소
     alarmCheckTimer?.cancel();
     countdownTimer?.cancel();
+
+    // 서버에 알람 등록
+    try {
+      // arrivalDateTime 계산 (서버 계산에도 참고용)
+      final now = DateTime.now();
+      var hour24 = arrivalHour;
+      if (arrivalPeriod == '오후' && arrivalHour != 12) hour24 += 12;
+      else if (arrivalPeriod == '오전' && arrivalHour == 12) hour24 = 0;
+      var arrivalDateTime = DateTime(now.year, now.month, now.day, hour24, arrivalMinute);
+      if (arrivalDateTime.isBefore(now)) arrivalDateTime = arrivalDateTime.add(const Duration(days: 1));
+      await _alarmApiService.registerAlarm(
+        arrivalTime: arrivalDateTime.toIso8601String(),
+        preparationTime: preparationTime.inMinutes,
+      );
+    } catch (e) {
+      print('알람 서버 등록 실패: $e');
+    }
 
     setState(() {
       isAlarmScheduleActive = true;
@@ -507,8 +536,8 @@ class _HomePageState extends State<HomePage> {
     // 오늘의 일정 가져오기
     final todayEvents = _eventService.getEvents(today);
     
-    // 상위 3개 즐겨찾기 가져오기
-    final topFavorites = _favoriteService.getTopFavorites();
+    // 상위 3개 즐겨찾기 가져오기 (메인 페이지용)
+    final List<FavoriteRouteModel> topFavorites = _favoriteService.getTopFavorites();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3EFEE),
@@ -518,237 +547,198 @@ class _HomePageState extends State<HomePage> {
         right: false,
         bottom: false,
         child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 검색창
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const ArriveMapPage()),
-                  );
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.black26, width: 1),
-                  ),
-                  child: AbsorbPointer(
-                    child: TextField(
-                      controller: searchController,
-                      decoration: const InputDecoration(
-                        hintText: '출발, 도착지 검색',
-                        prefixIcon: Icon(Icons.search, color: Colors.black54),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(vertical: 14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 검색창
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const SearchPage()),
+                    );
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.black26, width: 1),
+                    ),
+                    child: AbsorbPointer(
+                      child: TextField(
+                        controller: searchController,
+                        decoration: const InputDecoration(
+                          hintText: '출발, 도착지 검색',
+                          prefixIcon: Icon(Icons.search, color: Colors.black54),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        style: const TextStyle(fontSize: 16),
                       ),
-                      style: const TextStyle(fontSize: 16),
                     ),
                   ),
                 ),
-              ),
-              SizedBox(height: verticalGap),
-              // 남은 준비 시간 카드 (통합된 버전) - 알람 상태 표시 추가
-              GestureDetector(
-                onTap: _goToTimeSettingPage,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 2,
-                        offset: Offset(0, 1),
-                      ),
-                    ],
-                    // 알람이 울릴 때 테두리 색상 변경
-                    border: _isAlarmRinging
-                        ? Border.all(color: Colors.red, width: 2)
-                        : null,
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text(
-                            '남은 준비 시간',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.black87,
-                              fontWeight: FontWeight.w500,
+                SizedBox(height: verticalGap),
+                // 남은 준비 시간 카드 (통합된 버전) - 알람 상태 표시 추가
+                GestureDetector(
+                  onTap: _goToTimeSettingPage,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 2,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                      // 알람이 울릴 때 테두리 색상 변경
+                      border: _isAlarmRinging
+                          ? Border.all(color: Colors.red, width: 2)
+                          : null,
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text(
+                              '남은 준비 시간',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.black87,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
+                            if (_isAlarmRinging) ...[
+                              const SizedBox(width: 8),
+                              Icon(
+                                Icons.alarm,
+                                color: Colors.red,
+                                size: 20,
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _formatDuration(remainingTime),
+                          style: TextStyle(
+                            fontSize: 40,
+                            fontWeight: FontWeight.bold,
+                            color: _isAlarmRinging ? Colors.red : Colors.black,
+                            letterSpacing: 2,
                           ),
-                          if (_isAlarmRinging) ...[
-                            const SizedBox(width: 8),
-                            Icon(
-                              Icons.alarm,
-                              color: Colors.red,
-                              size: 20,
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              _formatPrepTime(),
+                              style: const TextStyle(
+                                fontSize: 18,
+                                color: Colors.green,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ],
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _formatDuration(remainingTime),
-                        style: TextStyle(
-                          fontSize: 40,
-                          fontWeight: FontWeight.bold,
-                          color: _isAlarmRinging ? Colors.red : Colors.black,
-                          letterSpacing: 2,
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _formatPrepTime(),
-                            style: const TextStyle(
-                              fontSize: 18,
-                              color: Colors.green,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      // 도착시간과 알람예정시간 정보
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          // 설정 도착시간
-                          Column(
-                            children: [
-                              const Text(
-                                '설정 도착시간',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.black54,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _getArrivalTimeString(),
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.blue,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                          // 구분선
-                          Container(
-                            height: 40,
-                            width: 1,
-                            color: Colors.black12,
-                          ),
-                          // 알람예정시간
-                          Column(
-                            children: [
-                              const Text(
-                                '알람예정시간',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.black54,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _getAlarmTimeString(),
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.orange,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      // 버튼 영역 - 상태에 따라 다른 버튼 표시
-                      if (!isAlarmScheduleActive && !isCountdownActive)
-                        ElevatedButton(
-                          onPressed: _startAlarmSchedule,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            foregroundColor: Colors.white,
-                            minimumSize: Size(160, 36),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                          ),
-                          child: const Text(
-                            '알람 시작',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        )
-                      else if (isAlarmScheduleActive)
-                        Column(
+                        const SizedBox(height: 16),
+                        // 도착시간과 알람예정시간 정보
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                           children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                            // 설정 도착시간
+                            Column(
                               children: [
-                                Icon(Icons.access_time, color: Colors.blue, size: 16),
-                                const SizedBox(width: 4),
                                 const Text(
-                                  '알람예정시간 대기 중...',
+                                  '설정 도착시간',
                                   style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.blue,
+                                    fontSize: 13,
+                                    color: Colors.black54,
                                     fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _getArrivalTimeString(),
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.blue,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 8),
-                            ElevatedButton(
-                              onPressed: _stopAlarmSchedule,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                                foregroundColor: Colors.white,
-                                minimumSize: Size(160, 36),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(18),
+                            // 구분선
+                            Container(
+                              height: 40,
+                              width: 1,
+                              color: Colors.black12,
+                            ),
+                            // 알람예정시간
+                            Column(
+                              children: [
+                                const Text(
+                                  '알람예정시간',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.black54,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
-                              ),
-                              child: const Text(
-                                '알람 취소',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
+                                const SizedBox(height: 4),
+                                Text(
+                                  _getAlarmTimeString(),
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.orange,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              ),
+                              ],
                             ),
                           ],
-                        )
-                      else if (isCountdownActive)
+                        ),
+                        const SizedBox(height: 16),
+                        // 버튼 영역 - 상태에 따라 다른 버튼 표시
+                        if (!isAlarmScheduleActive && !isCountdownActive)
+                          ElevatedButton(
+                            onPressed: _startAlarmSchedule,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                              minimumSize: Size(160, 36),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                            ),
+                            child: const Text(
+                              '알람 시작',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          )
+                        else if (isAlarmScheduleActive)
                           Column(
                             children: [
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.timer, color: Colors.green, size: 16),
+                                  Icon(Icons.access_time, color: Colors.blue, size: 16),
                                   const SizedBox(width: 4),
                                   const Text(
-                                    '준비시간 카운트다운 진행 중...',
+                                    '알람예정시간 대기 중...',
                                     style: TextStyle(
                                       fontSize: 14,
-                                      color: Colors.green,
+                                      color: Colors.blue,
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),
@@ -756,7 +746,7 @@ class _HomePageState extends State<HomePage> {
                               ),
                               const SizedBox(height: 8),
                               ElevatedButton(
-                                onPressed: _stopCountdown,
+                                onPressed: _stopAlarmSchedule,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.red,
                                   foregroundColor: Colors.white,
@@ -766,7 +756,7 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                 ),
                                 child: const Text(
-                                  '중지',
+                                  '알람 취소',
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.bold,
@@ -774,214 +764,240 @@ class _HomePageState extends State<HomePage> {
                                 ),
                               ),
                             ],
-                          ),
-                    ],
+                          )
+                        else if (isCountdownActive)
+                            Column(
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.timer, color: Colors.green, size: 16),
+                                    const SizedBox(width: 4),
+                                    const Text(
+                                      '준비시간 카운트다운 진행 중...',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.green,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                ElevatedButton(
+                                  onPressed: _stopCountdown,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red,
+                                    foregroundColor: Colors.white,
+                                    minimumSize: Size(160, 36),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(18),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    '중지',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              SizedBox(height: verticalGap),
-              // 즐겨찾기 아이콘 섹션 추가
-              _buildFavoriteIcons(topFavorites),
-              SizedBox(height: verticalGap),
-              // 다음 경로 박스 (기존 교통수단 아이콘들을 대체)
-              GestureDetector(
-                onTap: _goToShortestRoutePage,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.black26, width: 1),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 4,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
+                SizedBox(height: verticalGap),
+                // 즐겨찾기 아이콘 섹션 추가
+                _buildFavoriteIcons(topFavorites),
+                SizedBox(height: verticalGap),
+                // 다음 경로 박스 (기존 교통수단 아이콘들을 대체)
+                GestureDetector(
+                  onTap: _goToShortestRoutePage,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.black26, width: 1),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        // 왼쪽 아이콘 영역
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.directions,
+                            size: 32,
+                            color: Colors.blue,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // 중앙 텍스트 영역
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                '다음 경로',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                '최적의 경로를 확인하세요',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // 오른쪽 화살표 아이콘
+                        Icon(
+                          Icons.arrow_forward_ios,
+                          size: 20,
+                          color: Colors.black54,
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Row(
-                    children: [
-                      // 왼쪽 아이콘 영역
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          Icons.directions,
-                          size: 32,
-                          color: Colors.blue,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      // 중앙 텍스트 영역
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                ),
+                SizedBox(height: verticalGap),
+                // MM/DD 요일 + 오늘 일정 요약 카드
+                GestureDetector(
+                  onTap: _goToCalendarPage, // 캘린더 페이지로 이동
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.black12, width: 1),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text(
-                              '다음 경로',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
+                            Text(
+                              formattedDate,
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w600,
                                 color: Colors.black87,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              '최적의 경로를 확인하세요',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.black54,
-                              ),
+                            const Icon(
+                              Icons.calendar_today,
+                              color: Colors.blue,
+                              size: 22,
                             ),
                           ],
                         ),
-                      ),
-                      // 오른쪽 화살표 아이콘
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        size: 20,
-                        color: Colors.black54,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              SizedBox(height: verticalGap),
-              // MM/DD 요일 + 오늘 일정 요약 카드
-              GestureDetector(
-                onTap: _goToCalendarPage, // 캘린더 페이지로 이동
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.black12, width: 1),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            formattedDate,
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
+                        const SizedBox(height: 12),
+                        const Divider(height: 1, color: Colors.black12),
+                        const SizedBox(height: 12),
+                        const Text(
+                          '오늘 일정',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black87,
                           ),
-                          const Icon(
-                            Icons.calendar_today,
-                            color: Colors.blue,
-                            size: 22,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      const Divider(height: 1, color: Colors.black12),
-                      const SizedBox(height: 12),
-                      const Text(
-                        '오늘 일정',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.black87,
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      if (todayEvents.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12.0),
-                          child: Text(
-                            '오늘 예정된 일정이 없습니다',
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: Colors.black54,
+                        const SizedBox(height: 8),
+                        if (todayEvents.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12.0),
+                            child: Text(
+                              '오늘 예정된 일정이 없습니다',
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.black54,
+                              ),
+                              textAlign: TextAlign.center,
                             ),
-                            textAlign: TextAlign.center,
-                          ),
-                        )
-                      else
-                        ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: todayEvents.length > 3 ? 3 : todayEvents.length, // 최대 3개만 표시
-                          itemBuilder: (context, index) {
-                            final event = todayEvents[index]; // 이벤트 객체를 미리 가져오기
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4.0),
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.blue.shade200),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.event,
-                    color: Colors.blue,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      event.title ?? event.content ?? '제목 없음', // title이 있으면 title, 없으면 content 사용
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.black87,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (event.time != null && event.time!.isNotEmpty) // time 속성 사용
-                    Text(
-                      event.time!,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.black54,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          );
-        },
+                          )
+                        else
+                          ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: todayEvents.length > 3 ? 3 : todayEvents.length, // 최대 3개만 표시
+                            itemBuilder: (context, index) {
+                              final event = todayEvents[index]; // 이벤트 객체를 미리 가져오기
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.blue.shade200),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.event,
+                                        color: Colors.blue,
+                                        size: 16,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          event.title ?? event.content ?? '제목 없음', // title이 있으면 title, 없으면 content 사용
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.black87,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if (event.time != null && event.time!.isNotEmpty) // time 속성 사용
+                                        Text(
+                                          event.time!,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.black54,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                       ],
                     ),
                   ),
-      ),
-      if (todayEvents.length > 3)
-        Padding(
-          padding: const EdgeInsets.only(top: 8.0),
-          child: Text(
-            '외 ${todayEvents.length - 3}개 일정 더보기',
-            style: const TextStyle(
-              fontSize: 13,
-              color: Colors.blue,
-              fontWeight: FontWeight.w500,
+                ),
+              ],
             ),
-            textAlign: TextAlign.center,
           ),
         ),
-    ],
-    ),
-    ),
-    ),
-    ),
+      ),
     );
   }
 
   // 즐겨찾기 아이콘 위젯
-  Widget _buildFavoriteIcons(List<Map<String, dynamic>> favorites) {
+  Widget _buildFavoriteIcons(List<FavoriteRouteModel> favorites) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
       decoration: BoxDecoration(
@@ -1001,7 +1017,7 @@ class _HomePageState extends State<HomePage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                '즐겨찾는 장소',
+                '즐겨찾는 경로',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -1013,9 +1029,9 @@ class _HomePageState extends State<HomePage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const FavoriteManagementPage(),
+                      builder: (context) => const FavoritePlacesPage(),
                     ),
-                  );
+                  ).then((_) => _favoriteService.loadData());
                 },
                 child: Text(
                   '관리',
@@ -1029,36 +1045,37 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
           const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
             children: favorites.isEmpty
-                ? [
-                    _buildEmptyFavoriteIcon(),
-                    _buildEmptyFavoriteIcon(),
-                    _buildEmptyFavoriteIcon(),
-                  ]
+                  ? [ _buildEmptyFavoriteIcon() ]
                 : [
-                    for (int i = 0; i < 3; i++)
-                      i < favorites.length
-                          ? _buildFavoriteIcon(favorites[i])
-                          : _buildEmptyFavoriteIcon(),
+                      ...favorites.map((f) => Padding(
+                        padding: const EdgeInsets.only(right: 16.0),
+                        child: _buildFavoriteIcon(f),
+                      )),
+                      _buildEmptyFavoriteIcon(),
                   ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  // 즐겨찾기 아이콘
-  Widget _buildFavoriteIcon(Map<String, dynamic> favorite) {
+  // 즐겨찾기 경로 아이콘
+  Widget _buildFavoriteIcon(FavoriteRouteModel favorite) {
+    final iconData = _getFavoriteIconData(favorite.category);
+    final iconColor = _getFavoriteIconColor(favorite.category);
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => ArriveMapPage(
-              initialDestination: favorite['name'],
-              initialDestinationAddress: favorite['address'],
+            builder: (context) => SearchPage(
+              initialDestination: favorite.destination,
+              initialDestinationAddress: favorite.destination,
             ),
           ),
         );
@@ -1069,25 +1086,27 @@ class _HomePageState extends State<HomePage> {
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: _getFavoriteIconColor(favorite['icon']),
+              color: iconColor,
               borderRadius: BorderRadius.circular(30),
               boxShadow: [
                 BoxShadow(
-                  color: _getFavoriteIconColor(favorite['icon']).withOpacity(0.3),
+                  color: iconColor.withOpacity(0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
               ],
             ),
+            child: Center(
             child: Icon(
-              _getFavoriteIconData(favorite['icon']),
+                iconData,
               color: Colors.white,
               size: 28,
+              ),
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            favorite['name'],
+            _getCategoryLabel(favorite.category),
             style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
@@ -1108,9 +1127,9 @@ class _HomePageState extends State<HomePage> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => const FavoriteManagementPage(),
+            builder: (context) => const FavoritePlacesPage(),
           ),
-        );
+        ).then((_) => _favoriteService.loadData());
       },
       child: Column(
         children: [
@@ -1171,6 +1190,21 @@ class _HomePageState extends State<HomePage> {
       case 'hospital': return Colors.pink;
       case 'gas_station': return Colors.brown;
       default: return Colors.grey;
+    }
+  }
+
+  // 즐겨찾기 카테고리 레이블 (한글)
+  String _getCategoryLabel(String category) {
+    switch (category) {
+      case 'general': return '일반';
+      case 'home': return '집';
+      case 'work': return '직장';
+      case 'school': return '학교';
+      case 'restaurant': return '식당';
+      case 'shopping': return '쇼핑';
+      case 'hospital': return '병원';
+      case 'gas_station': return '주유소';
+      default: return category;
     }
   }
 

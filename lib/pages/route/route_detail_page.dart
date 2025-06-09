@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'models/route_response.dart';
+import '../../models/route_response.dart';
 import 'package:intl/intl.dart';
 
 class RouteDetailPage extends StatelessWidget {

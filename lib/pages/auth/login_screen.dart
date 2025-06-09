@@ -4,11 +4,14 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
-import 'main.dart'; // MainScreen으로 이동하기 위한 import
-import 'mypage.dart'; // MyPage import 추가
+import '../../main.dart'; // MainScreen으로 이동하기 위한 import
+import '../my/mypage.dart'; // MyPage import 추가
 import 'package:flutter/foundation.dart';  // for kIsWeb
 import 'dart:io' show Platform;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../config/server_config.dart';
+import '../../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -39,88 +42,47 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _authenticateWithGoogle() async {
-    final codeVerifier = _genVerifier();
-    final codeChallenge = _genChallenge(codeVerifier);
-    final state = _genState();
-
-    // 4) 플랫폼별 Client ID 설정 (Android, iOS용 별도 관리)
-    final androidClientId = dotenv.env['ANDROID_CLIENT_ID']!;
-    final iosClientId = dotenv.env['IOS_CLIENT_ID']!;
-    final clientId = Platform.isAndroid ? androidClientId : iosClientId;
-    final redirectUri = dotenv.env['REDIRECT_URI']!;
-    final callbackScheme = redirectUri.split(':').first;
-
-    // 6) 인증 URL 생성
-    final authUrl = Uri.https(
-      'accounts.google.com',
-      '/o/oauth2/v2/auth',
-      {
-        'response_type': 'code',
-        'client_id': clientId,
-        'redirect_uri': redirectUri,
-        'scope': 'openid email profile https://www.googleapis.com/auth/calendar',
-        'state': state,
-        'code_challenge': codeChallenge,
-        'code_challenge_method': 'S256',
-        'access_type': 'offline',
-        'prompt': 'consent',
-      },
-    ).toString();
-
-    // 7) 외부 브라우저에서 인증 → deep link 수신
-    final result = await FlutterWebAuth2.authenticate(
-      url: authUrl,
-      callbackUrlScheme: callbackScheme,
-    );
-    final uri = Uri.parse(result);
-    // CSRF 검증
-    if (uri.queryParameters['state'] != state) {
-      throw Exception('Invalid state');
-    }
-    final code = uri.queryParameters['code']!;
-    
-    // 8) 서버로 code+codeVerifier 전송
-    final serverBaseUrl = dotenv.env['SERVER_BASE_URL']!;
-    final resp = await http.post(
-      Uri.parse('$serverBaseUrl/auth/google/code'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'code': code,
-        'codeVerifier': codeVerifier,
-        'platform': Platform.isAndroid ? 'android' : 'ios',
-      }),
-    );
-    if (resp.statusCode != 200) {
-      throw Exception('Token exchange failed: ${resp.body}');
-    }
-    final data = jsonDecode(resp.body)['data'];
-    // TODO: 받은 data['access_token'], data['refresh_token'], data['id_token'] 저장 및 사용자 처리
-
-    // 로그인 성공 후 홈 화면으로 이동 (이전 스택 제거)
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => MainScreen(
-          userName: data['idToken']['name'] ?? '',
-          userEmail: data['idToken']['email'] ?? '',
-          initialIndex: 0,
+    try {
+      final authResult = await AuthService().loginWithGoogle();
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => MainScreen(
+            userName: authResult.name,
+            userEmail: authResult.email,
+            initialIndex: 0,
+          ),
         ),
-      ),
-      (route) => false,
-    );
+        (route) => false,
+      );
+    } catch (e) {
+      print('Google login failed: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('로그인 실패: $e')),
+      );
+    }
   }
 
   // 게스트로 로그인하는 함수 추가
-  void _continueAsGuest() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => const MainScreen(
-          userName: '게스트',
-          userEmail: 'guest@example.com',
-          initialIndex: 0,
+  Future<void> _continueAsGuest() async {
+    print('Starting guest login');
+    try {
+      final guestResult = await AuthService().loginAsGuest();
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => MainScreen(
+            userName: guestResult.name,
+            userEmail: guestResult.email,
+            initialIndex: 0,
+          ),
         ),
-      ),
-      (route) => false,
-    );
+        (route) => false,
+      );
+    } catch (e) {
+      print('Guest login failed: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('게스트 로그인 실패: $e')),
+      );
+    }
   }
 
   @override

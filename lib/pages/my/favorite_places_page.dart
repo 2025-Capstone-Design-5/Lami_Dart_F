@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'search_history_service.dart';
-import 'arrivemappage.dart';
+import '../../search_history_service.dart';
+import '../search/search_page.dart';
 
 class FavoritePlacesPage extends StatefulWidget {
   const FavoritePlacesPage({Key? key}) : super(key: key);
@@ -134,7 +134,7 @@ class _FavoritePlacesPageState extends State<FavoritePlacesPage> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const ArriveMapPage()),
+                MaterialPageRoute(builder: (context) => const SearchPage()),
               );
             },
             icon: const Icon(Icons.search),
@@ -361,11 +361,11 @@ class _FavoritePlacesPageState extends State<FavoritePlacesPage> {
   }
   
   void _selectRoute(Map<String, dynamic> route) {
-    // 경로 선택 시 ArriveMapPage로 이동하면서 출발지와 도착지 정보 전달
+    // 경로 선택 시 SearchPage로 이동하면서 출발지와 도착지 정보 전달
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (context) => ArriveMapPage(
+        builder: (context) => SearchPage(
           initialDeparture: route['departureName'],
           initialDepartureAddress: route['departureAddress'],
           initialDestination: route['destinationName'],
