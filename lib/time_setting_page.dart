@@ -443,6 +443,8 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
                       final headers = <String, String>{
                         'Content-Type': 'application/json; charset=UTF-8',
                       };
+                      // Log values before submission
+                      debugPrint('DEBUG Submit values -> departureName: $departureName, departureAddress: $departureAddress, destinationName: $destinationName, destinationAddress: $destinationAddress');
                       final body = jsonEncode({
                         'fromAddress': departureAddress,
                         'toAddress': destinationAddress,

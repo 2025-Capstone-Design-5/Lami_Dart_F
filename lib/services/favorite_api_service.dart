@@ -37,6 +37,7 @@ class FavoriteApiService {
     required String origin,
     required String destination,
     required String category,
+    required String wakeUpTime,
   }) async {
     final uri = Uri.parse('$baseUrl/traffic/routes/favorites');
     final payload = {
@@ -44,7 +45,9 @@ class FavoriteApiService {
       'origin': origin,
       'destination': destination,
       'category': category,
+      'wakeUpTime': wakeUpTime,
     };
+    print('FavoriteApiService.addFavorite payload: $payload');
     final resp = await http.post(uri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload));

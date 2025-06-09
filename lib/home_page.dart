@@ -950,48 +950,48 @@ class _HomePageState extends State<HomePage> {
                                   color: Colors.blue.shade50,
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(color: Colors.blue.shade200),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.event,
-                                      color: Colors.blue,
-                                      size: 16,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        event.title ?? event.content ?? '제목 없음', // title이 있으면 title, 없으면 content 사용
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.black87,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    if (event.time != null && event.time!.isNotEmpty) // time 속성 사용
-                                      Text(
-                                        event.time!,
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.black54,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                    ],
-                  ),
-                ),
               ),
-            ],
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.event,
+                    color: Colors.blue,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      event.title ?? event.content ?? '제목 없음', // title이 있으면 title, 없으면 content 사용
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black87,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (event.time != null && event.time!.isNotEmpty) // time 속성 사용
+                    Text(
+                      event.time!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.black54,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+                          ),
+                      ],
+                    ),
           ),
         ),
-      ),
+    ],
+    ),
+    ),
+    ),
     ),
     );
   }
@@ -1048,15 +1048,15 @@ class _HomePageState extends State<HomePage> {
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
-              children: favorites.isEmpty
+            children: favorites.isEmpty
                   ? [ _buildEmptyFavoriteIcon() ]
-                  : [
+                : [
                       ...favorites.map((f) => Padding(
                         padding: const EdgeInsets.only(right: 16.0),
                         child: _buildFavoriteIcon(f),
                       )),
                       _buildEmptyFavoriteIcon(),
-                    ],
+                  ],
             ),
           ),
         ],
@@ -1097,10 +1097,10 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
             child: Center(
-              child: Icon(
+            child: Icon(
                 iconData,
-                color: Colors.white,
-                size: 28,
+              color: Colors.white,
+              size: 28,
               ),
             ),
           ),

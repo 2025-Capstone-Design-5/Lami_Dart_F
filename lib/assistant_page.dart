@@ -17,6 +17,9 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'route_detail_page.dart';
 import 'main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'widgets/favorite_list_widget.dart';
+import 'models/favorite_route_model.dart';
 
 class AssistantPage extends StatefulWidget {
   const AssistantPage({Key? key}) : super(key: key);
@@ -31,6 +34,10 @@ class _AssistantPageState extends State<AssistantPage> {
   String? _googleId; // 실제 Google ID 저장
   final List<_ChatMessage> _messages = [];
   final ScrollController _scrollController = ScrollController();
+  // STT and TTS
+  late stt.SpeechToText _speech;
+  bool _speechEnabled = false;
+  String _lastWords = '';
   // 저장 시 사용할 사용자 지정 카테고리 (general, home, work, school 등)
   String _selectedCategory = 'general';
 
@@ -38,7 +45,26 @@ class _AssistantPageState extends State<AssistantPage> {
   void initState() {
     super.initState();
     _loadGoogleId();
+    // Initialize speech and TTS
+    _speech = stt.SpeechToText();
+    _initSpeech();
   }
+
+  Future<void> _initSpeech() async {
+    _speechEnabled = await _speech.initialize();
+    setState(() {});
+  }
+
+  void _startListening() {
+    _speech.listen(onResult: (result) {
+      setState(() {
+        _lastWords = result.recognizedWords;
+        _controller.text = _lastWords;
+      });
+    });
+  }
+
+  void _stopListening() => _speech.stop();
 
   Future<void> _loadGoogleId() async {
     final prefs = await SharedPreferences.getInstance();
@@ -79,6 +105,22 @@ class _AssistantPageState extends State<AssistantPage> {
         // Try parse JSON for route detail and summary
         try {
           final decoded = json.decode(event);
+          if (decoded is Map<String, dynamic> && decoded.containsKey('favorites')) {
+            final favs = (decoded['favorites'] as List)
+                .map((e) => FavoriteRouteModel.fromJson(e as Map<String, dynamic>))
+                .toList();
+            setState(() {
+              _messages.add(_ChatMessage(favorites: favs, isUser: false));
+            });
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _scrollController.animateTo(
+                _scrollController.position.maxScrollExtent,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
+            });
+            continue;
+          }
           if (decoded is Map<String, dynamic> && decoded.containsKey('main')) {
             final resp = RouteDetailResponse.fromJson(decoded);
             setState(() {
@@ -320,7 +362,9 @@ class _AssistantPageState extends State<AssistantPage> {
                             )
                           : msg.routeDetail != null
                             ? RouteDetailWidget(detail: msg.routeDetail!)
-                            : (() {
+                            : msg.favorites != null
+                              ? FavoriteListWidget(favorites: msg.favorites!)
+                              : (() {
                                 // Try to pretty-print JSON, else show raw text
                                 try {
                                   final dynamic obj = json.decode(msg.text);
@@ -397,6 +441,15 @@ class _AssistantPageState extends State<AssistantPage> {
                               ),
                             ),
                             IconButton(
+                              icon: Icon(
+                                _speech.isListening ? Icons.mic : Icons.mic_none,
+                                color: Colors.white,
+                              ),
+                              onPressed: _speechEnabled
+                                  ? (_speech.isListening ? _stopListening : _startListening)
+                                  : null,
+                            ),
+                            IconButton(
                               icon: Icon(Icons.send, color: Colors.white),
                               onPressed: () => _sendMessage(_controller.text),
                             ),
@@ -422,12 +475,14 @@ class _ChatMessage {
   final SummaryData? summaryData;
   final Map<String, dynamic>? categoryData;
   final RouteDetail? routeDetail;
+  final List<FavoriteRouteModel>? favorites;
 
   _ChatMessage({
     this.text = '',
     this.summaryData,
     this.categoryData,
     this.routeDetail,
+    this.favorites,
     this.isTyping = false,
     required this.isUser,
   });

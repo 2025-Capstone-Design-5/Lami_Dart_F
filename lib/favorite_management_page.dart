@@ -214,6 +214,7 @@ class _FavoriteManagementPageState extends State<FavoriteManagementPage> {
     String origin = '';
     String destination = '';
     String category = 'general';
+    String wakeUpTime = '';
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -228,6 +229,10 @@ class _FavoriteManagementPageState extends State<FavoriteManagementPage> {
             TextField(
               decoration: const InputDecoration(labelText: '목적지'),
               onChanged: (v) => destination = v,
+            ),
+            TextField(
+              decoration: const InputDecoration(labelText: '기상 시간 (HH:mm)'),
+              onChanged: (v) => wakeUpTime = v,
             ),
             const SizedBox(height: 8),
             DropdownButton<String>(
@@ -246,11 +251,18 @@ class _FavoriteManagementPageState extends State<FavoriteManagementPage> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
           ElevatedButton(
             onPressed: () async {
+              if (wakeUpTime.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('기상 시간을 입력해주세요.')),
+                );
+                return;
+              }
               Navigator.pop(context);
               await _apiService.addFavorite(
                 origin: origin,
                 destination: destination,
                 category: category,
+                wakeUpTime: wakeUpTime,
               );
               await _loadFavorites();
             },
