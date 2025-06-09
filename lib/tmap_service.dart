@@ -27,10 +27,63 @@ class TmapPlace {
 
   factory TmapPlace.fromJson(Map<String, dynamic> json, {bool isPoi = true}) {
     if (isPoi) {
-      // POI 검색 결과
+      // POI 검색 결과 - 더 상세한 주소 정보 조합
+      String address = '';
+      
+      // 우선순위: fullAddress > address > 상세 주소 구성요소 조합
+      if (json['fullAddress'] != null && json['fullAddress'].toString().trim().isNotEmpty) {
+        address = json['fullAddress'];
+      } else if (json['address'] != null && json['address'].toString().trim().isNotEmpty) {
+        address = json['address'];
+      } else {
+        // TMAP API에서 제공하는 모든 주소 구성요소를 조합
+        List<String> addressParts = [];
+        
+        // 시도 (upperAddrName)
+        if (json['upperAddrName'] != null && json['upperAddrName'].toString().trim().isNotEmpty) {
+          addressParts.add(json['upperAddrName']);
+        }
+        
+        // 시군구 (middleAddrName)
+        if (json['middleAddrName'] != null && json['middleAddrName'].toString().trim().isNotEmpty) {
+          addressParts.add(json['middleAddrName']);
+        }
+        
+        // 읍면동 (lowerAddrName)
+        if (json['lowerAddrName'] != null && json['lowerAddrName'].toString().trim().isNotEmpty) {
+          addressParts.add(json['lowerAddrName']);
+        }
+        
+        // 상세주소 (detailAddrName) - 지번지 정보 포함
+        if (json['detailAddrName'] != null && json['detailAddrName'].toString().trim().isNotEmpty) {
+          addressParts.add(json['detailAddrName']);
+        }
+        
+        // 건물명 등 추가 정보 (buildingName)
+        if (json['buildingName'] != null && json['buildingName'].toString().trim().isNotEmpty) {
+          addressParts.add(json['buildingName']);
+        }
+        
+        // 도로명 주소 (roadName)
+        if (json['roadName'] != null && json['roadName'].toString().trim().isNotEmpty) {
+          addressParts.add(json['roadName']);
+        }
+        
+        // 지번 정보 (firstNo, secondNo)
+        if (json['firstNo'] != null && json['firstNo'].toString().trim().isNotEmpty) {
+          String jibun = json['firstNo'];
+          if (json['secondNo'] != null && json['secondNo'].toString().trim().isNotEmpty) {
+            jibun += '-' + json['secondNo'];
+          }
+          addressParts.add(jibun);
+        }
+        
+        address = addressParts.join(' ');
+      }
+      
       return TmapPlace(
         name: json['name'] ?? '',
-        address: json['address'] ?? json['upperAddrName'] ?? '',
+        address: address.trim(),
         category: json['category'] ?? '',
         lat: double.tryParse(json['lat']?.toString() ?? ''),
         lon: double.tryParse(json['lon']?.toString() ?? ''),
