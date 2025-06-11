@@ -39,10 +39,19 @@ class AuthService {
     final challenge = _genChallenge(verifier);
     final state = _genState();
 
-    final androidId = dotenv.env['ANDROID_CLIENT_ID']!;
-    final iosId = dotenv.env['IOS_CLIENT_ID']!;
+    final androidId = dotenv.env['ANDROID_CLIENT_ID'];
+    if (androidId == null) {
+      throw Exception('ENV: ANDROID_CLIENT_ID not set');
+    }
+    final iosId = dotenv.env['IOS_CLIENT_ID'];
+    if (iosId == null) {
+      throw Exception('ENV: IOS_CLIENT_ID not set');
+    }
     final clientId = Platform.isAndroid ? androidId : iosId;
-    final redirectUri = dotenv.env['REDIRECT_URI']!;
+    final redirectUri = dotenv.env['REDIRECT_URI'];
+    if (redirectUri == null) {
+      throw Exception('ENV: REDIRECT_URI not set');
+    }
     final callbackScheme = redirectUri.split(':').first;
 
     final authUrl = Uri.https(
