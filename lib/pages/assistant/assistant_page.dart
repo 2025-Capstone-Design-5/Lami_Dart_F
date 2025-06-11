@@ -39,8 +39,12 @@ class _AssistantPageState extends State<AssistantPage> {
   late stt.SpeechToText _speech;
   bool _speechEnabled = false;
   String _lastWords = '';
+  // Stream control
+  StreamSubscription<String>? _streamSubscription;
+  bool _isStreaming = false;
   // 저장 시 사용할 사용자 지정 카테고리 (general, home, work, school 등)
   String _selectedCategory = 'general';
+  String? _cacheKey;
 
   @override
   void initState() {
@@ -77,7 +81,19 @@ class _AssistantPageState extends State<AssistantPage> {
     });
   }
 
+  void _stopStreaming() {
+    _streamSubscription?.cancel();
+    _streamSubscription = null;
+    setState(() {
+      _isStreaming = false;
+    });
+  }
+
   Future<void> _sendMessage(String text) async {
+    if (_isStreaming) {
+      _stopStreaming();
+      return;
+    }
     if (text.trim().isEmpty) return;
     // Ensure googleId is loaded
     if (_googleId == null) {
@@ -93,117 +109,65 @@ class _AssistantPageState extends State<AssistantPage> {
       _messages.add(_ChatMessage(isUser: false, isTyping: true, text: ''));
     });
     _controller.clear();
-    try {
-      await for (final event in _agentService.streamProcess(
-        userId: userId,
-        message: text,
-      )) {
-        // Log received event to console
-        print('AssistantPage SSE event: $event');
-        // Remove typing indicator on first event
-        if (_messages.any((m) => m.isTyping == true)) {
-          setState(() {
-            _messages.removeWhere((m) => m.isTyping == true);
-          });
-        }
-        // Try parse JSON for route detail and summary
-        try {
-          final decoded = json.decode(event);
-          if (decoded is Map<String, dynamic> && decoded.containsKey('favorites')) {
-            final favs = (decoded['favorites'] as List)
-                .map((e) => FavoriteRouteModel.fromJson(e as Map<String, dynamic>))
-                .toList();
-            setState(() {
-              _messages.add(_ChatMessage(favorites: favs, isUser: false));
-            });
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _scrollController.animateTo(
-                _scrollController.position.maxScrollExtent,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-              );
-            });
-            continue;
-          }
-          if (decoded is Map<String, dynamic> && decoded.containsKey('main')) {
-            final resp = RouteDetailResponse.fromJson(decoded);
-            setState(() {
-              _messages.add(_ChatMessage(routeDetail: resp.main, isUser: false));
-            });
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _scrollController.animateTo(
-                _scrollController.position.maxScrollExtent,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-              );
-            });
-            continue;
-          }
-          // Detect category summary JSON and display via CategoryMainWidget
-          if (decoded is Map<String, dynamic> && decoded.keys.any((k) => ['walk','bus','car','subway','bus_subway'].contains(k))) {
-            setState(() {
-              _messages.add(_ChatMessage(categoryData: decoded, isUser: false));
-            });
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _scrollController.animateTo(
-                _scrollController.position.maxScrollExtent,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-              );
-            });
-            continue;
-          }
-        } catch (_) {}
-        // Fallback: raw text event
+    setState(() {
+      _isStreaming = true;
+    });
+    // Subscribe to SSE stream and handle a single response
+    _streamSubscription = _agentService.streamProcess(
+      message: text,
+    ).listen((event) {
+      // Remove typing indicator
+      if (_messages.any((m) => m.isTyping)) {
         setState(() {
-          _messages.add(_ChatMessage(text: event, isUser: false));
-        });
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          final maxExtent = _scrollController.position.maxScrollExtent;
-          _scrollController.animateTo(
-            maxExtent,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
+          _messages.removeWhere((m) => m.isTyping);
         });
       }
-      return;
-    } catch (e) {
-      // Log streaming error to console
-      print('AssistantPage streaming error: $e');
+      try {
+        final obj = json.decode(event) as Map<String, dynamic>;
+        final response = obj['payload'] as String;
+        setState(() {
+          _messages.add(_ChatMessage(text: response.trim(), isUser: false));
+          _isStreaming = false;
+        });
+      } catch (_) {
+        setState(() {
+          _messages.add(_ChatMessage(text: event, isUser: false));
+          _isStreaming = false;
+        });
+      }
+      _stopStreaming();
+    }, onError: (e) {
       setState(() {
         _messages.add(_ChatMessage(text: '오류: $e', isUser: false));
       });
-    }
+      _stopStreaming();
+    });
   }
 
   /// Traffic 컨트롤러 캐시에서 상세 경로를 가져와 모달로 보여줍니다.
   Future<void> _fetchDetail(String category, int index) async {
-    final baseUrl = getServerBaseUrl();
-    final uri = Uri.parse('$baseUrl/agent/detail');
-    if (_googleId == null) {
+    if (_cacheKey == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그인 정보가 로드되지 않았습니다.')), 
+        const SnackBar(content: Text('요약 키가 없습니다. 먼저 경로 요약을 확인하세요.')),
       );
       return;
     }
-    final userId = _googleId!;
-    print('[AssistantPage] fetchDetail 요청: userId=$userId, category=$category, index=$index');
+    final uri = Uri.parse('${getServerBaseUrl()}/agent/detail');
     try {
       final resp = await http.post(
         uri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
+          'summaryKey': _cacheKey,
           'category': category,
           'index': index,
-          'userId': userId,
         }),
       );
       print('[AssistantPage] fetchDetail 응답: status=${resp.statusCode}, body=${resp.body}');
       if (resp.statusCode >= 200 && resp.statusCode < 300) {
-        // Parse the 'main' object from the detail response
-        final Map<String, dynamic> decoded = json.decode(resp.body) as Map<String, dynamic>;
-        final mainJson = decoded['main'] as Map<String, dynamic>;
+        final decodedResp = json.decode(resp.body) as Map<String, dynamic>;
+        final data = decodedResp['data'] as Map<String, dynamic>;
+        final mainJson = data['main'] as Map<String, dynamic>;
         final detail = RouteDetail.fromJson(mainJson);
         // Show a simple detail modal with RouteDetailWidget
         showModalBottomSheet(
@@ -347,7 +311,9 @@ class _AssistantPageState extends State<AssistantPage> {
                       // Determine bubble alignment
                       final align = msg.isUser ? Alignment.centerRight : Alignment.centerLeft;
                       // Bubble color
-                      final bgColor = Colors.white.withOpacity(0.2);
+                      final bgColor = msg.isUser
+                          ? Colors.blue.withOpacity(0.3)
+                          : Colors.white.withOpacity(0.3);
                       // Content widget
                       if (msg.isTyping == true) {
                         // Typing cursor indicator
@@ -394,18 +360,30 @@ class _AssistantPageState extends State<AssistantPage> {
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(20),
                           child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
                             child: Container(
                               margin: const EdgeInsets.symmetric(vertical: 6),
                               padding: const EdgeInsets.all(16),
                               constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.35),
+                                color: bgColor,
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
+                                border: Border.all(
+                                  color: msg.isUser
+                                      ? Colors.blueAccent.withOpacity(0.5)
+                                      : Colors.white.withOpacity(0.5),
+                                  width: 1.5,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.2),
+                                    blurRadius: 8,
+                                    spreadRadius: 1,
+                                  ),
+                                ],
                               ),
                               child: DefaultTextStyle(
-                                style: TextStyle(color: Colors.white, fontSize: 16),
+                                style: TextStyle(color: msg.isUser ? Colors.white : Colors.black87, fontSize: 16),
                                 child: content,
                               ),
                             ),
@@ -421,13 +399,19 @@ class _AssistantPageState extends State<AssistantPage> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(30),
                     child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.4),
+                          color: Colors.white.withOpacity(0.25),
                           borderRadius: BorderRadius.circular(30),
-                          border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.15),
+                              blurRadius: 6,
+                              spreadRadius: 1,
+                            ),
+                          ],
                         ),
                         child: Row(
                           children: [
@@ -453,7 +437,7 @@ class _AssistantPageState extends State<AssistantPage> {
                                   : null,
                             ),
                             IconButton(
-                              icon: Icon(Icons.send, color: Colors.white),
+                              icon: Icon(_isStreaming ? Icons.stop : Icons.send, color: Colors.white),
                               onPressed: () => _sendMessage(_controller.text),
                             ),
                           ],

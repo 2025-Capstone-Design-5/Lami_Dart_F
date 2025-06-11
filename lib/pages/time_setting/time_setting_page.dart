@@ -461,8 +461,8 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
                         headers: headers,
                         body: body,
                       );
-                      debugPrint('Response status: \\${response.statusCode}');
-                      debugPrint('Response body: \\${response.body}');
+                      debugPrint('Response status: ${response.statusCode}');
+                      debugPrint('Response body: ${response.body}');
                       if (response.statusCode >= 200 && response.statusCode < 300) {
                         try {
                         // 응답을 SummaryResponse로 파싱
