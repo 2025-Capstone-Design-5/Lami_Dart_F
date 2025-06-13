@@ -15,7 +15,7 @@ import '../../event_service.dart'; // EventService 불러오기
 import '../calendar/calendar_page.dart' hide EventService; // CalendarPage 불러오기
 import '../../route_store.dart';
 import '../../favorite_service.dart';
-import '../my/favorite_places_page.dart';
+import '../favorite/favorite_management_page.dart';
 import '../../services/alarm_api_service.dart';
 import '../../models/route_response.dart';
 import '../../models/favorite_route_model.dart';
@@ -535,9 +535,6 @@ class _HomePageState extends State<HomePage> {
 
     // 오늘의 일정 가져오기
     final todayEvents = _eventService.getEvents(today);
-    
-    // 상위 3개 즐겨찾기 가져오기 (메인 페이지용)
-    final List<FavoriteRouteModel> topFavorites = _favoriteService.getTopFavorites();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3EFEE),
@@ -810,7 +807,7 @@ class _HomePageState extends State<HomePage> {
                 ),
                 SizedBox(height: verticalGap),
                 // 즐겨찾기 아이콘 섹션 추가
-                _buildFavoriteIcons(topFavorites),
+                _buildFavoriteIcons(),
                 SizedBox(height: verticalGap),
                 // 다음 경로 박스 (기존 교통수단 아이콘들을 대체)
                 GestureDetector(
@@ -996,8 +993,16 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // 즐겨찾기 아이콘 위젯
-  Widget _buildFavoriteIcons(List<FavoriteRouteModel> favorites) {
+  // 즐겨찾기 아이콘 섹션
+  Widget _buildFavoriteIcons() {
+    return _buildAllFavorites();
+  }
+  
+  // 통합된 즐겨찾기 섹션
+  Widget _buildAllFavorites() {
+    // 모든 즐겨찾기를 가져옵니다 (최대 4개)
+    final displayFavorites = _favoriteService.getTopFavorites();
+    
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
       decoration: BoxDecoration(
@@ -1017,7 +1022,7 @@ class _HomePageState extends State<HomePage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                '즐겨찾는 경로',
+                '즐겨찾는 장소',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -1029,7 +1034,7 @@ class _HomePageState extends State<HomePage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const FavoritePlacesPage(),
+                      builder: (context) => const FavoriteManagementPage(),
                     ),
                   ).then((_) => _favoriteService.loadData());
                 },
@@ -1045,37 +1050,59 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
           const SizedBox(height: 16),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-            children: favorites.isEmpty
-                  ? [ _buildEmptyFavoriteIcon() ]
-                : [
-                      ...favorites.map((f) => Padding(
-                        padding: const EdgeInsets.only(right: 16.0),
-                        child: _buildFavoriteIcon(f),
-                      )),
-                      _buildEmptyFavoriteIcon(),
+          displayFavorites.isEmpty
+            ? Center(
+                child: Column(
+                  children: [
+                    _buildEmptyFavoriteIcon(isDeparture: false),
+                    const SizedBox(height: 8),
+                    Text(
+                      '즐겨찾는 장소가 없습니다',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
                   ],
-            ),
-          ),
+                ),
+              )
+            : Wrap(
+                spacing: 16.0, // 가로 간격
+                runSpacing: 16.0, // 세로 간격
+                alignment: WrapAlignment.start,
+                children: [
+                  ...displayFavorites.map((f) => _buildFavoriteIcon(f, isDeparture: f.isDeparture)),
+                  _buildEmptyFavoriteIcon(isDeparture: false),
+                ],
+              ),
         ],
       ),
     );
   }
 
   // 즐겨찾기 경로 아이콘
-  Widget _buildFavoriteIcon(FavoriteRouteModel favorite) {
-    final iconData = _getFavoriteIconData(favorite.category);
-    final iconColor = _getFavoriteIconColor(favorite.category);
+  Widget _buildFavoriteIcon(FavoriteRouteModel favorite, {bool isDeparture = false}) {
+    final iconData = _getFavoriteIconData(favorite.iconName.isNotEmpty ? favorite.iconName : favorite.category);
+    final iconColor = _getFavoriteIconColor(favorite.iconName.isNotEmpty ? favorite.iconName : favorite.category);
+    
+    // 표시할 장소 이름 결정
+    String placeName = '';
+    if (isDeparture) {
+      placeName = favorite.origin;
+    } else {
+      placeName = favorite.destination;
+    }
+    
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => SearchPage(
-              initialDestination: favorite.destination,
-              initialDestinationAddress: favorite.destination,
+              initialDeparture: isDeparture ? favorite.origin : null,
+              initialDepartureAddress: isDeparture ? favorite.originAddress : null,
+              initialDestination: !isDeparture ? favorite.destination : null,
+              initialDestinationAddress: !isDeparture ? favorite.destinationAddress : null,
             ),
           ),
         );
@@ -1097,16 +1124,38 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
             child: Center(
-            child: Icon(
-                iconData,
-              color: Colors.white,
-              size: 28,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(
+                    iconData,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                  if (isDeparture)
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          Icons.departure_board,
+                          color: iconColor,
+                          size: 12,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            _getCategoryLabel(favorite.category),
+            placeName,
             style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
@@ -1121,13 +1170,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   // 빈 즐겨찾기 아이콘
-  Widget _buildEmptyFavoriteIcon() {
+  Widget _buildEmptyFavoriteIcon({bool isDeparture = false}) {
     return GestureDetector(
       onTap: () {
+        // 즐겨찾기 추가 페이지로 이동
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => const FavoritePlacesPage(),
+            builder: (context) => const FavoriteManagementPage(),
           ),
         ).then((_) => _favoriteService.loadData());
       },
@@ -1153,7 +1203,7 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 8),
           Text(
-            '추가',
+            '장소 추가',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,

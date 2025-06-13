@@ -24,6 +24,192 @@ class SearchPage extends StatefulWidget {
   State<SearchPage> createState() => _SearchPageState();
 }
 
+// 즐겨찾기 추가 다이얼로그 위젯
+class AddFavoriteDialog extends StatefulWidget {
+  final bool isDeparture;
+  final String initialName;
+  final String address;
+  final Future<void> Function(String name, String category, String iconName) onSave;
+
+  const AddFavoriteDialog({
+    Key? key,
+    required this.isDeparture,
+    required this.initialName,
+    required this.address,
+    required this.onSave,
+  }) : super(key: key);
+
+  @override
+  _AddFavoriteDialogState createState() => _AddFavoriteDialogState();
+}
+
+class _AddFavoriteDialogState extends State<AddFavoriteDialog> {
+  late TextEditingController nameController;
+  String selectedCategory = 'general';
+  String selectedIcon = 'place';
+  
+  // 카테고리에 따른 아이콘 이름 매핑
+  final Map<String, String> categoryToIconMap = {
+    'general': 'place',
+    'home': 'home',
+    'work': 'work',
+    'school': 'school',
+    'restaurant': 'restaurant',
+    'shopping': 'shopping_cart',
+    'hospital': 'local_hospital',
+    'gas_station': 'local_gas_station',
+  };
+  
+  // 카테고리에 따른 아이콘 데이터 매핑
+  final Map<String, IconData> categoryToIconData = {
+    'general': Icons.place,
+    'home': Icons.home,
+    'work': Icons.work,
+    'school': Icons.school,
+    'restaurant': Icons.restaurant,
+    'shopping': Icons.shopping_cart,
+    'hospital': Icons.local_hospital,
+    'gas_station': Icons.local_gas_station,
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    nameController = TextEditingController(text: widget.initialName);
+  }
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    super.dispose();
+  }
+
+  Widget _buildCategoryChip(String value, String label, IconData icon, Color color) {
+    final isSelected = selectedCategory == value;
+    
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          selectedCategory = value;
+          // 카테고리에 맞는 아이콘 이름 설정
+          selectedIcon = categoryToIconMap[value] ?? 'place';
+          print('카테고리 선택: $value, 아이콘: ${selectedIcon}');
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withOpacity(0.2) : Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(20),
+          border: isSelected ? Border.all(color: color, width: 1.5) : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? color : Colors.grey.shade600,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? color : Colors.grey.shade700,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.isDeparture ? '출발지 즐겨찾기 추가' : '목적지 즐겨찾기 추가'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: '이름',
+                hintText: '즐겨찾기 이름을 입력하세요',
+              ),
+            ),
+            const SizedBox(height: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 8.0),
+                  child: Text(
+                    '카테고리',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.black54,
+                    ),
+                  ),
+                ),
+                Wrap(
+                  spacing: 8.0,
+                  runSpacing: 8.0,
+                  children: [
+                    _buildCategoryChip('general', '일반', categoryToIconData['general']!, Colors.grey),
+                    _buildCategoryChip('home', '집', categoryToIconData['home']!, Colors.green),
+                    _buildCategoryChip('work', '직장', categoryToIconData['work']!, Colors.blue),
+                    _buildCategoryChip('school', '학교', categoryToIconData['school']!, Colors.orange),
+                    _buildCategoryChip('restaurant', '식당', categoryToIconData['restaurant']!, Colors.red),
+                    _buildCategoryChip('shopping', '쇼핑', categoryToIconData['shopping']!, Colors.purple),
+                    _buildCategoryChip('hospital', '병원', categoryToIconData['hospital']!, Colors.pink),
+                    _buildCategoryChip('gas_station', '주유소', categoryToIconData['gas_station']!, Colors.brown),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('취소'),
+        ),
+        TextButton(
+          onPressed: () async {
+            final name = nameController.text.trim();
+            if (name.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('이름을 입력해주세요')),
+              );
+              return;
+            }
+            print('저장: $name, 카테고리: $selectedCategory, 아이콘: $selectedIcon');
+            try {
+              // 다이얼로그를 먼저 닫고 저장 작업 수행
+              Navigator.pop(context);
+              await widget.onSave(name, selectedCategory, selectedIcon);
+            } catch (e) {
+              print('즐겨찾기 저장 에러: $e');
+              // 이미 다이얼로그가 닫혔으므로 context가 유효한지 확인
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('즐겨찾기 저장 실패: $e')),
+                );
+              }
+            }
+          },
+          child: const Text('추가'),
+        ),
+      ],
+    );
+  }
+}
+
 class _SearchPageState extends State<SearchPage> {
   final TextEditingController _departureController = TextEditingController();
   final TextEditingController _destinationController = TextEditingController();
@@ -64,6 +250,7 @@ class _SearchPageState extends State<SearchPage> {
     TmapService.initialize();
     _loadData();
     _searchHistoryService.addListener(_updateUI);
+    _favoriteService.addListener(_updateUI);
     _favoriteService.loadData();
     
     // 초기값 설정
@@ -93,6 +280,7 @@ class _SearchPageState extends State<SearchPage> {
     _departureController.dispose();
     _destinationController.dispose();
     _searchHistoryService.removeListener(_updateUI);
+    _favoriteService.removeListener(_updateUI);
     _debounceTimer?.cancel();
     super.dispose();
   }
@@ -240,24 +428,132 @@ class _SearchPageState extends State<SearchPage> {
         border: Border.all(color: Colors.grey[300]!),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: TextField(
-        controller: controller,
-        onChanged: _onSearchChanged, // 매개변수 수정됨
-        onTap: () => _onFieldTapped(isDeparture),
-        decoration: InputDecoration(
-          hintText: hintText,
-          prefixIcon: Icon(icon, color: iconColor),
-          suffixIcon: controller.text.isNotEmpty
-              ? IconButton(
-                  onPressed: () => _clearField(controller, isDeparture),
-                  icon: const Icon(Icons.clear, color: Colors.grey),
-                )
-              : null,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 12,
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: controller,
+              onChanged: _onSearchChanged, // 매개변수 수정됨
+              onTap: () => _onFieldTapped(isDeparture),
+              decoration: InputDecoration(
+                hintText: hintText,
+                prefixIcon: Icon(icon, color: iconColor),
+                suffixIcon: controller.text.isNotEmpty
+                    ? IconButton(
+                        onPressed: () => _clearField(controller, isDeparture),
+                        icon: const Icon(Icons.clear, color: Colors.grey),
+                      )
+                    : null,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+            ),
           ),
+          if ((isDeparture && searchedDeparture != null) || (!isDeparture && searchedDestination != null))
+            IconButton(
+              icon: const Icon(Icons.star_border, color: Colors.amber),
+              onPressed: () {
+                _showAddFavoriteDialog(isDeparture);
+              },
+            ),
+        ],
+      ),
+    );
+  }
+  
+  // 즐겨찾기 추가 다이얼로그
+  void _showAddFavoriteDialog(bool isDeparture, {BuildContext? dialogContext, String? customPlace, String? customAddress}) {
+    final String place = customPlace ?? (isDeparture 
+        ? searchedDeparture ?? ''
+        : searchedDestination ?? '');
+    final String address = customAddress ?? (isDeparture 
+        ? searchedDepartureAddress ?? ''
+        : searchedDestinationAddress ?? '');
+    final BuildContext ctx = dialogContext ?? context;
+    
+    showDialog(
+      context: ctx,
+      builder: (context) => AddFavoriteDialog(
+        isDeparture: isDeparture,
+        initialName: place,
+        address: address,
+        onSave: (name, category, iconName) async {
+          print('onSave 호출: 이름=$name, 카테고리=$category, 아이콘=$iconName, 주소=$address');
+          try {
+            if (isDeparture) {
+              print('출발지 즐겨찾기 추가 시도');
+              await _favoriteService.addDepartureFavorite(
+                place: name,
+                category: category,
+                address: address,
+                iconName: iconName,
+              );
+            } else {
+              print('목적지 즐겨찾기 추가 시도');
+              await _favoriteService.addDestinationFavorite(
+                place: name,
+                category: category,
+                address: address,
+                iconName: iconName,
+              );
+            }
+            print('즐겨찾기 추가 성공');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('즐겨찾기에 추가되었습니다')),
+              );
+            }
+            return;
+          } catch (e) {
+            print('즐겨찾기 추가 에러: $e');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('즐겨찾기 추가 실패: $e')),
+              );
+            }
+            // 에러를 다시 던져서 호출자가 처리할 수 있도록 함
+            rethrow;
+          }
+        },
+      ),
+    );
+  }
+
+  // 이 메서드는 첫 번째 _showAddFavoriteDialog 메서드와 통합되었습니다.
+
+  Widget _buildCategoryChip(String value, String label, IconData icon, Color color, StateSetter setState, String selectedValue, Function(String) onSelected) {
+    final isSelected = selectedValue == value;
+    
+    return GestureDetector(
+      onTap: () => onSelected(value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withOpacity(0.2) : Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(20),
+          border: isSelected ? Border.all(color: color, width: 1.5) : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected ? color : Colors.grey.shade600,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? color : Colors.grey.shade700,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                fontSize: 13,
+              ),
+            ),
+          ],
         ),
       ),
     );
