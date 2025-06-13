@@ -73,9 +73,8 @@ class _HomePageState extends State<HomePage> {
 
     // 알람 등록 시 홈 알람 위젯 갱신 콜백 등록
     globalAlarmRefreshCallback = () async {
-      // 알람 관련 상태를 새로 불러오거나 setState로 갱신
-      await _initAlarmApiService();
-      setState(() {});
+      // 서버 알람 재조회 및 상태 갱신
+      await _loadAlarms();
     };
   }
 
@@ -84,6 +83,50 @@ class _HomePageState extends State<HomePage> {
     final googleId = prefs.getString('googleId') ?? '';
     setState(() { _googleId = googleId; });
     _alarmApiService = AlarmApiService(googleId: googleId);
+    // 서버에 저장된 알람 불러오기
+    await _loadAlarms();
+  }
+
+  /// 서버에 저장된 알람을 조회하고 홈 화면 위젯 상태를 업데이트합니다.
+  Future<void> _loadAlarms() async {
+    if (_googleId == null || _googleId!.isEmpty) return;
+    try {
+      final alarms = await _alarmApiService.getAlarms();
+      if (alarms.isNotEmpty) {
+        // 가장 빠른 알람을 선택
+        alarms.sort((a, b) => DateTime.parse(a['wakeUpTime']).compareTo(DateTime.parse(b['wakeUpTime'])));
+        final alarm = alarms.first;
+        final arrivalTime = DateTime.parse(alarm['arrivalTime']);
+        final prepMinutes = alarm['preparationTime'] as int;
+        setState(() {
+          // 도착 시간 설정
+          final hour24 = arrivalTime.hour;
+          arrivalPeriod = hour24 >= 12 ? '오후' : '오전';
+          arrivalHour = hour24 % 12 == 0 ? 12 : hour24 % 12;
+          arrivalMinute = arrivalTime.minute;
+          // 준비 시간 및 남은 시간
+          preparationTime = Duration(minutes: prepMinutes);
+          remainingTime = preparationTime;
+          isAlarmScheduleActive = true;
+        });
+        // 타이머 실행(내부 로직 재사용)
+        alarmCheckTimer?.cancel();
+        alarmCheckTimer = Timer.periodic(
+          const Duration(seconds: 1),
+          (timer) {
+            final now = DateTime.now();
+            final wakeUpTime = DateTime.parse(alarm['wakeUpTime']);
+            if (now.isAfter(wakeUpTime) || now.isAtSameMomentAs(wakeUpTime)) {
+              timer.cancel();
+              setState(() { isAlarmScheduleActive = false; });
+              _startAlarm('schedule');
+            }
+          },
+        );
+      }
+    } catch (e) {
+      print('알람 조회 실패: $e');
+    }
   }
 
   // 알람 초기화
