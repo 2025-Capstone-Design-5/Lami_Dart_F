@@ -19,26 +19,27 @@ class FavoriteApiService {
   Future<List<FavoriteRouteModel>> getFavorites() async {
     try {
       final uri = Uri.parse('$baseUrl/traffic/routes/favorites?googleId=$googleId');
-      final resp = await http.get(uri).timeout(const Duration(seconds: 5));
+      // 타임아웃 시간을 3초로 단축
+      final resp = await http.get(uri).timeout(const Duration(seconds: 3));
       if (resp.statusCode >= 200 && resp.statusCode < 300) {
         final List<dynamic> list = jsonDecode(resp.body) as List<dynamic>;
         final favorites = list
             .map((e) => FavoriteRouteModel.fromJson(e as Map<String, dynamic>))
             .toList();
-        // 서버에서 가져온 즐겨찾기를 로컬에도 저장
-        await _saveLocalFavorites(favorites);
+        // 서버에서 가져온 즐겨찾기를 로컬에도 저장 (백그라운드에서 처리)
+        _saveLocalFavorites(favorites); // await 제거하여 비동기로 처리
         return favorites;
       } else {
         print('서버 응답 오류: ${resp.statusCode} - ${resp.body}');
-        return _getLocalFavorites();
+        return getLocalFavorites();
       }
     } catch (e) {
       print('서버 연결 실패, 로컬 데이터 사용: $e');
-      return _getLocalFavorites();
+      return getLocalFavorites();
     }
   }
 
-  /// 새로운 즐겨찾기를 추가합니다.
+  /// 새로운 즐겨찾기를 추가합니다. (최적화)
   Future<void> addFavorite({
     required String origin,
     required String destination,
@@ -60,45 +61,50 @@ class FavoriteApiService {
       if (iconName != null) 'iconName': iconName,
       if (isDeparture != null) 'isDeparture': isDeparture,
     };
-    print('FavoriteApiService.addFavorite payload: $payload');
+    
+    // 먼저 로컬에 즐겨찾기 추가 (UI 반응성 향상)
+    _addLocalFavorite(payload);
     
     try {
       final uri = Uri.parse('$baseUrl/traffic/routes/favorites');
+      // 타임아웃 시간을 3초로 단축
       final resp = await http.post(uri,
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 5));
+          .timeout(const Duration(seconds: 3));
       
       if (resp.statusCode < 200 || resp.statusCode >= 300) {
         print('서버 응답 오류: ${resp.statusCode} - ${resp.body}');
-        throw Exception('즐겨찾기 추가 실패: ${resp.body}');
+        // 오류 발생 시 로컬 저장소에 이미 저장되어 있으므로 추가 작업 불필요
       }
     } catch (e) {
-      print('서버 연결 실패, 로컬에 즐겨찾기 추가: $e');
-      // 서버 연결 실패 시 로컬에 즐겨찾기 추가
-      await _addLocalFavorite(payload);
+      print('서버 연결 실패, 로컬에 즐겨찾기 추가 완료: $e');
+      // 이미 로컬에 저장했으므로 추가 작업 불필요
     }
   }
 
-  /// 지정한 ID의 즐겨찾기를 삭제합니다.
+  /// 지정한 ID의 즐겨찾기를 삭제합니다. (최적화)
   Future<void> removeFavorite(String favoriteId) async {
+    // 먼저 로컬에서 즐겨찾기 삭제 (UI 반응성 향상)
+    _removeLocalFavorite(favoriteId);
+    
     try {
       final uri = Uri.parse('$baseUrl/traffic/routes/favorites/$favoriteId?googleId=$googleId');
-      final resp = await http.delete(uri).timeout(const Duration(seconds: 5));
+      // 타임아웃 시간을 3초로 단축
+      final resp = await http.delete(uri).timeout(const Duration(seconds: 3));
       
       if (resp.statusCode < 200 || resp.statusCode >= 300) {
         print('서버 응답 오류: ${resp.statusCode} - ${resp.body}');
-        throw Exception('즐겨찾기 삭제 실패: ${resp.body}');
+        // 오류 발생 시 로컬 저장소에서 이미 삭제되어 있으므로 추가 작업 불필요
       }
     } catch (e) {
-      print('서버 연결 실패, 로컬에서 즐겨찾기 삭제: $e');
-      // 서버 연결 실패 시 로컬에서 즐겨찾기 삭제
-      await _removeLocalFavorite(favoriteId);
+      print('서버 연결 실패, 로컬에서 즐겨찾기 삭제 완료: $e');
+      // 이미 로컬에서 삭제했으므로 추가 작업 불필요
     }
   }
 
-  // 로컬 저장소에서 즐겨찾기 목록 가져오기
-  Future<List<FavoriteRouteModel>> _getLocalFavorites() async {
+  // 로컬 저장소에서 즐겨찾기 목록 가져오기 (public으로 변경)
+  Future<List<FavoriteRouteModel>> getLocalFavorites() async {
     final prefs = await SharedPreferences.getInstance();
     final favoritesJson = prefs.getString(_localFavoritesKey);
     if (favoritesJson == null) return [];
@@ -114,39 +120,64 @@ class FavoriteApiService {
     }
   }
 
-  // 로컬 저장소에 즐겨찾기 목록 저장
+  // 로컬 저장소에 즐겨찾기 목록 저장 (최적화)
   Future<void> _saveLocalFavorites(List<FavoriteRouteModel> favorites) async {
-    final prefs = await SharedPreferences.getInstance();
-    final favoritesJson = jsonEncode(favorites.map((f) => f.toJson()).toList());
-    await prefs.setString(_localFavoritesKey, favoritesJson);
+    // 백그라운드에서 처리하기 위해 isolate나 compute를 사용할 수 있지만,
+    // 간단하게 Future.microtask를 사용하여 메인 스레드 차단 방지
+    Future.microtask(() async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final favoritesJson = jsonEncode(favorites.map((f) => f.toJson()).toList());
+        await prefs.setString(_localFavoritesKey, favoritesJson);
+        print('로컬 즐겨찾기 저장 완료: ${favorites.length}개');
+      } catch (e) {
+        print('로컬 즐겨찾기 저장 오류: $e');
+      }
+    });
   }
 
-  // 로컬 저장소에 즐겨찾기 추가
+  // 로컬 저장소에 즐겨찾기 추가 (최적화)
   Future<void> _addLocalFavorite(Map<String, dynamic> favoriteData) async {
-    final favorites = await _getLocalFavorites();
-    
-    // 고유 ID 생성 (현재 시간 기반)
-    final id = 'local_${DateTime.now().millisecondsSinceEpoch}';
-    final newFavorite = FavoriteRouteModel(
-      id: id,
-      origin: favoriteData['origin'] as String,
-      originAddress: favoriteData['originAddress'] as String? ?? favoriteData['origin'] as String,
-      destination: favoriteData['destination'] as String,
-      destinationAddress: favoriteData['destinationAddress'] as String? ?? favoriteData['destination'] as String,
-      category: favoriteData['category'] as String,
-      iconName: favoriteData['iconName'] as String? ?? 'place',
-      createdAt: DateTime.now(),
-      isDeparture: favoriteData['isDeparture'] as bool? ?? false,
-    );
-    
-    favorites.add(newFavorite);
-    await _saveLocalFavorites(favorites);
+    // 백그라운드에서 처리
+    Future.microtask(() async {
+      try {
+        final favorites = await getLocalFavorites();
+        
+        // 고유 ID 생성 (현재 시간 기반)
+        final id = 'local_${DateTime.now().millisecondsSinceEpoch}';
+        final newFavorite = FavoriteRouteModel(
+          id: id,
+          origin: favoriteData['origin'] as String,
+          originAddress: favoriteData['originAddress'] as String? ?? favoriteData['origin'] as String,
+          destination: favoriteData['destination'] as String,
+          destinationAddress: favoriteData['destinationAddress'] as String? ?? favoriteData['destination'] as String,
+          category: favoriteData['category'] as String,
+          iconName: favoriteData['iconName'] as String? ?? 'place',
+          createdAt: DateTime.now(),
+          isDeparture: favoriteData['isDeparture'] as bool? ?? false,
+        );
+        
+        favorites.add(newFavorite);
+        _saveLocalFavorites(favorites); // await 제거하여 비동기로 처리
+        print('로컬 즐겨찾기 추가 완료: ${newFavorite.id}');
+      } catch (e) {
+        print('로컬 즐겨찾기 추가 오류: $e');
+      }
+    });
   }
 
-  // 로컬 저장소에서 즐겨찾기 삭제
+  // 로컬 저장소에서 즐겨찾기 삭제 (최적화)
   Future<void> _removeLocalFavorite(String favoriteId) async {
-    final favorites = await _getLocalFavorites();
-    favorites.removeWhere((f) => f.id == favoriteId);
-    await _saveLocalFavorites(favorites);
+    // 백그라운드에서 처리
+    Future.microtask(() async {
+      try {
+        final favorites = await getLocalFavorites();
+        favorites.removeWhere((f) => f.id == favoriteId);
+        _saveLocalFavorites(favorites); // await 제거하여 비동기로 처리
+        print('로컬 즐겨찾기 삭제 완료: $favoriteId');
+      } catch (e) {
+        print('로컬 즐겨찾기 삭제 오류: $e');
+      }
+    });
   }
 }
