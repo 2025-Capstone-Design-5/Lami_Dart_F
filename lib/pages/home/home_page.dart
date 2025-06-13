@@ -19,6 +19,7 @@ import '../my/favorite_places_page.dart';
 import '../../services/alarm_api_service.dart';
 import '../../models/route_response.dart';
 import '../../models/favorite_route_model.dart';
+import '../assistant/assistant_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -55,6 +56,9 @@ class _HomePageState extends State<HomePage> {
   Timer? _vibrationTimer;
   String _currentAlarmType = ''; // 현재 울리는 알람 타입 ('schedule' 또는 'countdown')
 
+  // 알람 등록 시 홈 알람 위젯 갱신 콜백
+  VoidCallback? globalAlarmRefreshCallback;
+
   @override
   void initState() {
     super.initState();
@@ -66,6 +70,13 @@ class _HomePageState extends State<HomePage> {
     _favoriteService.loadData();
     _favoriteService.addListener(_refreshState);
     _initAlarmApiService();
+
+    // 알람 등록 시 홈 알람 위젯 갱신 콜백 등록
+    globalAlarmRefreshCallback = () async {
+      // 알람 관련 상태를 새로 불러오거나 setState로 갱신
+      await _initAlarmApiService();
+      setState(() {});
+    };
   }
 
   Future<void> _initAlarmApiService() async {
@@ -108,6 +119,8 @@ class _HomePageState extends State<HomePage> {
     alarmCheckTimer?.cancel();
     _stopAlarm();
     _audioPlayer?.dispose();
+    // 콜백 해제
+    globalAlarmRefreshCallback = null;
     super.dispose();
   }
 
