@@ -24,6 +24,7 @@ dependencies:
   flutter_web_auth_2: ^4.1.0 # OAuth 인증 (migrated)
   crypto: ^3.0.1 # PKCE 생성
   speech_to_text: ^7.0.0 # STT (음성인식)
+  timeline_tile: ^2.0.0
 
 dev_dependencies:
   flutter_test:
