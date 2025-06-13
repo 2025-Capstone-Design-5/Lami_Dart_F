@@ -21,6 +21,10 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../../widgets/favorite_list_widget.dart';
 import '../../models/favorite_route_model.dart';
 import '../../config/server_config.dart';
+import '../../services/alarm_api_service.dart';
+
+typedef AlarmRefreshCallback = void Function();
+AlarmRefreshCallback? globalAlarmRefreshCallback;
 
 class AssistantPage extends StatefulWidget {
   const AssistantPage({Key? key}) : super(key: key);
@@ -140,9 +144,6 @@ class _AssistantPageState extends State<AssistantPage> {
           payload = inner['payload'];
         }
         switch (type) {
-          case 'message':
-            // Skip raw token events
-            break;
           case 'action_start':
             final map = payload as Map<String, dynamic>;
             final toolName = map['tool'] as String? ?? '';
@@ -224,6 +225,40 @@ class _AssistantPageState extends State<AssistantPage> {
             } else {
               final rawText = payload is String ? payload : json.encode(payload);
               final trimmed = rawText.trim();
+
+              // intermediateSteps가 있으면 추론 과정 메시지로 추가
+              if (payload is Map<String, dynamic> && payload.containsKey('intermediateSteps')) {
+                final steps = payload['intermediateSteps'] as List<dynamic>;
+                for (final step in steps) {
+                  final action = step['action'];
+                  final observation = step['observation'];
+                  final log = action?['log'] ?? '';
+                  final tool = action?['tool'] ?? '';
+                  // log(사고 과정) 메시지
+                  if (log != null && log.toString().trim().isNotEmpty) {
+                    setState(() {
+                      _messages.add(_ChatMessage(
+                        text: '💭 $log',
+                        isUser: false,
+                        isLog: true,
+                        tag: '추론',
+                      ));
+                    });
+                  }
+                  // observation 메시지
+                  if (observation != null && observation.toString().trim().isNotEmpty) {
+                    setState(() {
+                      _messages.add(_ChatMessage(
+                        text: '👀 $observation',
+                        isUser: false,
+                        isLog: true,
+                        tag: '관찰',
+                      ));
+                    });
+                  }
+                }
+              }
+
               setState(() {
                 _messages.add(_ChatMessage(text: trimmed, isUser: false, tag: '결과'));
                 _isStreaming = false;
@@ -241,6 +276,114 @@ class _AssistantPageState extends State<AssistantPage> {
             });
             _stopStreaming();
             _scrollToBottom();
+            break;
+          case 'token':
+            // JSON-encoded event inside token payload
+            if (payload is String && payload.startsWith('{')) {
+              try {
+                final inner = json.decode(payload) as Map<String, dynamic>;
+                final innerType = inner['type'];
+                final innerPayload = inner['payload'];
+                switch (innerType) {
+                  case 'action_start':
+                    final map = innerPayload as Map<String, dynamic>;
+                    final toolName = map['tool'] as String? ?? '';
+                    final reason = map['reason'] as String? ?? '';
+                    Map<String, dynamic> inputMap;
+                    final rawInput = map['toolInput'];
+                    if (rawInput is String) {
+                      inputMap = json.decode(rawInput) as Map<String, dynamic>;
+                    } else {
+                      inputMap = Map<String, dynamic>.from(rawInput as Map);
+                    }
+                    final inputText = inputMap.entries.map((e) => '${e.key}: ${e.value}').join(', ');
+                    final logText = '🔧 $toolName 호출 • 입력: $inputText • 이유: $reason';
+                    setState(() {
+                      _intermediateLogs.add(logText);
+                      _messages.add(_ChatMessage(text: logText, isLog: true, isUser: false, tag: toolName));
+                    });
+                    _scrollToBottom();
+                    break;
+                  case 'status':
+                    final statusMsg = (innerPayload as String).trim();
+                    setState(() {
+                      _intermediateLogs.add(statusMsg);
+                      _messages.add(_ChatMessage(text: statusMsg, isLog: true, isUser: false));
+                    });
+                    _scrollToBottom();
+                    break;
+                  case 'step':
+                    final stepMap = innerPayload as Map<String, dynamic>;
+                    final reason = stepMap['reason'] as String? ?? '';
+                    final stepLog = '💭 $reason';
+                    setState(() {
+                      _intermediateLogs.add(stepLog);
+                      _messages.add(_ChatMessage(text: stepLog, isLog: true, isUser: false, tag: '추론'));
+                    });
+                    _scrollToBottom();
+                    break;
+                  case 'action_result':
+                    // skip or handle as needed
+                    break;
+                  case 'observation':
+                    final obsText = innerPayload is String ? innerPayload : json.encode(innerPayload);
+                    final obsLog = obsText.trim();
+                    setState(() {
+                      _intermediateLogs.add(obsLog);
+                      _messages.add(_ChatMessage(text: obsLog, isLog: true, isUser: false));
+                    });
+                    _scrollToBottom();
+                    break;
+                  case 'final':
+                    // Parse JSON string if needed
+                    dynamic finalData = innerPayload;
+                    if (innerPayload is String) {
+                      try {
+                        finalData = json.decode(innerPayload);
+                      } catch (_) {}
+                    }
+                    // Handle route summary object
+                    if (finalData is Map<String, dynamic> && finalData.containsKey('routes')) {
+                      final summaryText = finalData['summary'] as String;
+                      final cacheKey = finalData['cacheKey'] as String;
+                      final routesJson = finalData['routes'] as List<dynamic>;
+                      final routesList = routesJson.map((e) => RouteSummary.fromJson(e as Map<String, dynamic>)).toList();
+                      final summaryData = SummaryData(origin: '', destination: '', summaryKey: cacheKey, routes: routesList);
+                      setState(() {
+                        _cacheKey = cacheKey;
+                        _messages.add(_ChatMessage(text: summaryText, isUser: false, summaryData: summaryData, tag: '결과'));
+                        _isStreaming = false;
+                      });
+                    } else {
+                      final rawText = finalData is String ? finalData : json.encode(finalData);
+                      final trimmed = rawText.trim();
+                      setState(() {
+                        _messages.add(_ChatMessage(text: trimmed, isUser: false, tag: '결과'));
+                        _isStreaming = false;
+                      });
+                    }
+                    _intermediateLogs.clear();
+                    _stopStreaming();
+                    _scrollToBottom();
+                    break;
+                  default:
+                    break;
+                }
+              } catch (_) {
+                // parsing failed, ignore
+              }
+            } else if (payload is String) {
+              // accumulate real tokens
+              setState(() {
+                _messageBuffer += payload;
+                if (_messages.isNotEmpty && _messages.last.isTyping) {
+                  _messages.last = _ChatMessage(text: _messageBuffer, isUser: false, isTyping: true);
+                } else {
+                  _messages.add(_ChatMessage(text: _messageBuffer, isUser: false, isTyping: true));
+                }
+              });
+              _scrollToBottom();
+            }
             break;
           default:
             break;
@@ -447,7 +590,40 @@ class _AssistantPageState extends State<AssistantPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              SummaryChatWidget(summaryData: summaryData),
+                              SummaryChatWidget(
+                                summaryData: summaryData,
+                                onSetAlarm: (route) async {
+                                  if (_googleId == null) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('로그인 정보가 없습니다.')),
+                                    );
+                                    return;
+                                  }
+                                  try {
+                                    // 예시: 도착 예정 시간(현재 시간 + duration), 준비 시간(5분)
+                                    final now = DateTime.now();
+                                    final arrival = now.add(Duration(seconds: route.duration));
+                                    final arrivalStr = arrival.toIso8601String();
+                                    final preparationTime = 5; // 분 단위, 필요시 UI에서 입력받게 할 수 있음
+                                    final alarmService = AlarmApiService(googleId: _googleId!);
+                                    await alarmService.registerAlarm(
+                                      arrivalTime: arrivalStr,
+                                      preparationTime: preparationTime,
+                                    );
+                                    // 홈 알람 위젯 갱신 트리거
+                                    if (globalAlarmRefreshCallback != null) {
+                                      globalAlarmRefreshCallback!();
+                                    }
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('알람이 성공적으로 등록되었습니다.')),
+                                    );
+                                  } catch (e) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('알람 등록 실패: $e')),
+                                    );
+                                  }
+                                },
+                              ),
                               const SizedBox(height: 8),
                               ElevatedButton(
                                 onPressed: () {

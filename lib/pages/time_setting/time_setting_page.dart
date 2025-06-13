@@ -178,59 +178,6 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
     }
   }
 
-  // 백엔드 서버에 도착시간 데이터 전송
-  Future<void> _sendArrivalTimeToServer() async {
-    try {
-      int hour24 = _convertTo24Hour(arrivalPeriod, arrivalHour);
-
-      final response = await http.post(
-        Uri.parse('https://your-backend-server.com/api/arrival-time'),
-        headers: <String, String>{
-          'Content-Type': 'application/json; charset=UTF-8',
-        },
-        body: jsonEncode(<String, dynamic>{
-          'year': arrivalDate.year,
-          'month': arrivalDate.month,
-          'day': arrivalDate.day,
-          'hour': hour24,
-          'minute': arrivalMinute,
-        }),
-      );
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        print('도착시간이 성공적으로 서버에 전송되었습니다.');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('도착시간이 성공적으로 저장되었습니다.'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } else {
-        print('서버 요청 실패: ${response.statusCode}');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('서버 저장에 실패했습니다.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print('서버 통신 에러: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('네트워크 오류가 발생했습니다.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   // 캘린더에 알람 일정 저장
   void _saveAlarmToCalendar() {
     if (alarmTime == null) return;

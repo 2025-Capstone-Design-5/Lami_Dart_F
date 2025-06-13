@@ -32,4 +32,16 @@ class AlarmApiService {
       throw Exception('알람 등록 실패: ${resp.body}');
     }
   }
+
+  /// 서버에 등록된 모든 알람을 조회합니다.
+  Future<List<Map<String, dynamic>>> getAlarms() async {
+    final uri = Uri.parse('$baseUrl/alarm?googleId=$googleId');
+    final resp = await http.get(uri);
+    if (resp.statusCode >= 200 && resp.statusCode < 300) {
+      final List<dynamic> data = jsonDecode(resp.body);
+      return data.cast<Map<String, dynamic>>();
+    } else {
+      throw Exception('알람 조회 실패: ${resp.body}');
+    }
+  }
 } 
