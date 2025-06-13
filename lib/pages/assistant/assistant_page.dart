@@ -39,8 +39,15 @@ class _AssistantPageState extends State<AssistantPage> {
   late stt.SpeechToText _speech;
   bool _speechEnabled = false;
   String _lastWords = '';
+  // Stream control
+  StreamSubscription<String>? _streamSubscription;
+  bool _isStreaming = false;
+  List<String> _intermediateLogs = [];
+  // Buffer for raw message tokens (Question/Thought)
+  String _messageBuffer = '';
   // 저장 시 사용할 사용자 지정 카테고리 (general, home, work, school 등)
   String _selectedCategory = 'general';
+  String? _cacheKey;
 
   @override
   void initState() {
@@ -77,7 +84,19 @@ class _AssistantPageState extends State<AssistantPage> {
     });
   }
 
+  void _stopStreaming() {
+    _streamSubscription?.cancel();
+    _streamSubscription = null;
+    setState(() {
+      _isStreaming = false;
+    });
+  }
+
   Future<void> _sendMessage(String text) async {
+    if (_isStreaming) {
+      _stopStreaming();
+      return;
+    }
     if (text.trim().isEmpty) return;
     // Ensure googleId is loaded
     if (_googleId == null) {
@@ -88,122 +107,186 @@ class _AssistantPageState extends State<AssistantPage> {
     }
     final userId = _googleId!;
     setState(() {
-      _messages.add(_ChatMessage(text: text, isUser: true));
+      _messages.add(_ChatMessage(text: text, isUser: true, tag: '입력'));
       // Show typing indicator
       _messages.add(_ChatMessage(isUser: false, isTyping: true, text: ''));
     });
+    _scrollToBottom();
     _controller.clear();
-    try {
-      await for (final event in _agentService.streamProcess(
-        userId: userId,
-        message: text,
-      )) {
-        // Log received event to console
-        print('AssistantPage SSE event: $event');
-        // Remove typing indicator on first event
-        if (_messages.any((m) => m.isTyping == true)) {
-          setState(() {
-            _messages.removeWhere((m) => m.isTyping == true);
-          });
-        }
-        // Try parse JSON for route detail and summary
-        try {
-          final decoded = json.decode(event);
-          if (decoded is Map<String, dynamic> && decoded.containsKey('favorites')) {
-            final favs = (decoded['favorites'] as List)
-                .map((e) => FavoriteRouteModel.fromJson(e as Map<String, dynamic>))
-                .toList();
-            setState(() {
-              _messages.add(_ChatMessage(favorites: favs, isUser: false));
-            });
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _scrollController.animateTo(
-                _scrollController.position.maxScrollExtent,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-              );
-            });
-            continue;
-          }
-          if (decoded is Map<String, dynamic> && decoded.containsKey('main')) {
-            final resp = RouteDetailResponse.fromJson(decoded);
-            setState(() {
-              _messages.add(_ChatMessage(routeDetail: resp.main, isUser: false));
-            });
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _scrollController.animateTo(
-                _scrollController.position.maxScrollExtent,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-              );
-            });
-            continue;
-          }
-          // Detect category summary JSON and display via CategoryMainWidget
-          if (decoded is Map<String, dynamic> && decoded.keys.any((k) => ['walk','bus','car','subway','bus_subway'].contains(k))) {
-            setState(() {
-              _messages.add(_ChatMessage(categoryData: decoded, isUser: false));
-            });
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              _scrollController.animateTo(
-                _scrollController.position.maxScrollExtent,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-              );
-            });
-            continue;
-          }
-        } catch (_) {}
-        // Fallback: raw text event
+    setState(() {
+      _isStreaming = true;
+      _intermediateLogs.clear();
+      _messageBuffer = '';
+    });
+    _scrollToBottom();
+    // Subscribe to SSE stream and handle a single response
+    _streamSubscription = _agentService.streamProcess(
+      message: text,
+    ).listen((event) {
+      // Remove typing indicator on first event
+      if (_messages.any((m) => m.isTyping)) {
         setState(() {
-          _messages.add(_ChatMessage(text: event, isUser: false));
-        });
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          final maxExtent = _scrollController.position.maxScrollExtent;
-          _scrollController.animateTo(
-            maxExtent,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
+          _messages.removeWhere((m) => m.isTyping);
         });
       }
-      return;
-    } catch (e) {
-      // Log streaming error to console
-      print('AssistantPage streaming error: $e');
+      try {
+        final obj = json.decode(event) as Map<String, dynamic>;
+        var type = obj['type'];
+        var payload = obj['payload'];
+        // 이중 인코딩 방어: type이 JSON string이면 한 번 더 파싱
+        if (type is String && type.startsWith('{')) {
+          final inner = json.decode(type);
+          type = inner['type'];
+          payload = inner['payload'];
+        }
+        switch (type) {
+          case 'message':
+            // Skip raw token events
+            break;
+          case 'action_start':
+            final map = payload as Map<String, dynamic>;
+            final toolName = map['tool'] as String? ?? '';
+            final reason = map['reason'] as String? ?? '';
+            // Parse and format tool input values
+            Map<String, dynamic> inputMap;
+            final rawInput = map['toolInput'];
+            if (rawInput is String) {
+              inputMap = json.decode(rawInput) as Map<String, dynamic>;
+            } else {
+              inputMap = Map<String, dynamic>.from(rawInput as Map);
+            }
+            final inputText = inputMap.entries
+                .map((e) => '${e.key}: ${e.value}')
+                .join(', ');
+            final logText = '🔧 $toolName 호출 • 입력: $inputText • 이유: $reason';
+            setState(() {
+              _intermediateLogs.add(logText);
+              _messages.add(_ChatMessage(text: logText, isLog: true, isUser: false, tag: toolName));
+            });
+            _scrollToBottom();
+            break;
+          case 'status':
+            final statusMsg = (payload as String).trim();
+            setState(() {
+              _intermediateLogs.add(statusMsg);
+              _messages.add(_ChatMessage(text: statusMsg, isLog: true, isUser: false));
+            });
+            _scrollToBottom();
+            break;
+          case 'step':
+            final stepMap = payload as Map<String, dynamic>;
+            final reason = stepMap['reason'] as String? ?? '';
+            final stepLog = '💭 $reason';
+            setState(() {
+              _intermediateLogs.add(stepLog);
+              _messages.add(_ChatMessage(text: stepLog, isLog: true, isUser: false, tag: '추론'));
+            });
+            _scrollToBottom();
+            break;
+          case 'action_result':
+            // No-op: skip action_result events
+            break;
+          case 'observation':
+            final obsText = payload is String ? payload : json.encode(payload);
+            final obsLog = obsText.trim();
+            setState(() {
+              _intermediateLogs.add(obsLog);
+              _messages.add(_ChatMessage(text: obsLog, isLog: true, isUser: false));
+            });
+            _scrollToBottom();
+            break;
+          case 'final':
+            // Handle final event: detect summary+routes payload
+            if (payload is Map<String, dynamic> && payload.containsKey('routes')) {
+              final summaryText = payload['summary'] as String;
+              final cacheKey = payload['cacheKey'] as String;
+              // parse structured routes
+              final routesJson = payload['routes'] as List<dynamic>;
+              final routesList = routesJson
+                  .map((e) => RouteSummary.fromJson(e as Map<String, dynamic>))
+                  .toList();
+              final summaryData = SummaryData(
+                origin: '',
+                destination: '',
+                summaryKey: cacheKey,
+                routes: routesList,
+              );
+              setState(() {
+                _cacheKey = cacheKey;
+                _messages.add(_ChatMessage(
+                  text: summaryText,
+                  isUser: false,
+                  summaryData: summaryData,
+                  tag: '결과',
+                ));
+                _isStreaming = false;
+              });
+            } else {
+              final rawText = payload is String ? payload : json.encode(payload);
+              final trimmed = rawText.trim();
+              setState(() {
+                _messages.add(_ChatMessage(text: trimmed, isUser: false, tag: '결과'));
+                _isStreaming = false;
+              });
+            }
+            _intermediateLogs.clear();
+            _stopStreaming();
+            _scrollToBottom();
+            break;
+          case 'error':
+            final msg = payload is Map ? (payload['message'] ?? payload.toString()) : payload.toString();
+            setState(() {
+              _messages.add(_ChatMessage(text: '오류: $msg', isUser: false));
+              _isStreaming = false;
+            });
+            _stopStreaming();
+            _scrollToBottom();
+            break;
+          default:
+            break;
+        }
+      } catch (_) {
+        setState(() {
+          _messages.add(_ChatMessage(text: event, isUser: false));
+          _isStreaming = false;
+        });
+        _stopStreaming();
+        _scrollToBottom();
+      }
+    }, onError: (e) {
       setState(() {
-        _messages.add(_ChatMessage(text: '오류: $e', isUser: false));
+        _messages.add(_ChatMessage(text: '스트리밍 오류: $e', isUser: false));
+        _isStreaming = false;
       });
-    }
+      _stopStreaming();
+      _scrollToBottom();
+    });
   }
 
   /// Traffic 컨트롤러 캐시에서 상세 경로를 가져와 모달로 보여줍니다.
   Future<void> _fetchDetail(String category, int index) async {
-    final baseUrl = getServerBaseUrl();
-    final uri = Uri.parse('$baseUrl/agent/detail');
-    if (_googleId == null) {
+    if (_cacheKey == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그인 정보가 로드되지 않았습니다.')), 
+        const SnackBar(content: Text('요약 키가 없습니다. 먼저 경로 요약을 확인하세요.')),
       );
       return;
     }
-    final userId = _googleId!;
-    print('[AssistantPage] fetchDetail 요청: userId=$userId, category=$category, index=$index');
+    final uri = Uri.parse('${getServerBaseUrl()}/agent/detail');
     try {
       final resp = await http.post(
         uri,
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
+          'summaryKey': _cacheKey,
           'category': category,
           'index': index,
-          'userId': userId,
         }),
       );
       print('[AssistantPage] fetchDetail 응답: status=${resp.statusCode}, body=${resp.body}');
       if (resp.statusCode >= 200 && resp.statusCode < 300) {
-        // Parse the 'main' object from the detail response
-        final Map<String, dynamic> decoded = json.decode(resp.body) as Map<String, dynamic>;
-        final mainJson = decoded['main'] as Map<String, dynamic>;
+        final decodedResp = json.decode(resp.body) as Map<String, dynamic>;
+        final data = decodedResp['data'] as Map<String, dynamic>;
+        final mainJson = data['main'] as Map<String, dynamic>;
         final detail = RouteDetail.fromJson(mainJson);
         // Show a simple detail modal with RouteDetailWidget
         showModalBottomSheet(
@@ -303,6 +386,18 @@ class _AssistantPageState extends State<AssistantPage> {
     }
   }
 
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -336,7 +431,7 @@ class _AssistantPageState extends State<AssistantPage> {
                     ),
                   ),
                 ),
-                // Chat messages
+                // Chat messages list
                 Expanded(
                   child: ListView.builder(
                     controller: _scrollController,
@@ -344,90 +439,97 @@ class _AssistantPageState extends State<AssistantPage> {
                     itemCount: _messages.length,
                     itemBuilder: (context, index) {
                       final msg = _messages[index];
-                      // Determine bubble alignment
-                      final align = msg.isUser ? Alignment.centerRight : Alignment.centerLeft;
-                      // Bubble color
-                      final bgColor = Colors.white.withOpacity(0.2);
-                      // Content widget
-                      if (msg.isTyping == true) {
-                        // Typing cursor indicator
-                        return Align(
-                          alignment: Alignment.centerLeft,
-                          child: TypingIndicator(),
+                      // Render summary with inline UI and navigation button
+                      if (msg.summaryData != null) {
+                        final summaryData = msg.summaryData!;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SummaryChatWidget(summaryData: summaryData),
+                              const SizedBox(height: 8),
+                              ElevatedButton(
+                                onPressed: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => RouteResultsPage(summaryData: summaryData),
+                                    ),
+                                  );
+                                },
+                                child: const Text('전체 경로 보기'),
+                              ),
+                            ],
+                          ),
                         );
                       }
-                      final content = msg.summaryData != null
-                        ? SummaryChatWidget(summaryData: msg.summaryData!)
-                        : msg.categoryData != null
-                          ? CategoryMainWidget(
-                              data: msg.categoryData!,
-                              onDetailTap: (category, index) => _fetchDetail(category, index),
-                            )
-                          : msg.routeDetail != null
-                            ? RouteDetailWidget(detail: msg.routeDetail!)
-                            : msg.favorites != null
-                              ? FavoriteListWidget(favorites: msg.favorites!)
-                              : (() {
-                                // Try to pretty-print JSON, else show raw text
-                                try {
-                                  final dynamic obj = json.decode(msg.text);
-                                  final pretty = JsonEncoder.withIndent('  ').convert(obj);
-                                  return SelectableText(
-                                    pretty,
-                                    style: TextStyle(
-                                      color: msg.isUser ? Colors.white : Colors.black87,
-                                      fontSize: 16,
-                                    ),
-                                  );
-                                } catch (_) {
-                                  return SelectableText(
-                                    msg.text,
-                                    style: TextStyle(
-                                      color: msg.isUser ? Colors.white : Colors.black87,
-                                      fontSize: 16,
-                                    ),
-                                  );
-                                }
-                              })();
-                      return Align(
-                        alignment: align,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(vertical: 6),
-                              padding: const EdgeInsets.all(16),
-                              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.35),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
-                              ),
-                              child: DefaultTextStyle(
-                                style: TextStyle(color: Colors.white, fontSize: 16),
-                                child: content,
-                              ),
+                      // Skip typing indicators
+                      if (msg.isTyping) {
+                        return SizedBox.shrink();
+                      }
+                      // Display logs and intermediate events as plain text
+                      if (!msg.isUser && msg.tag != '결과') {
+                        return Align(
+                          alignment: Alignment.centerLeft,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Text(
+                              msg.text,
+                              style: TextStyle(color: Colors.white70, fontSize: 14),
                             ),
                           ),
+                        );
+                      }
+                      // Show only user messages and final results as chat bubbles
+                      final isUser = msg.isUser;
+                      final alignment = isUser ? Alignment.centerRight : Alignment.centerLeft;
+                      final bgColor = isUser ? Colors.grey.shade200 : Colors.blueAccent;
+                      final textColor = isUser ? Colors.black87 : Colors.white;
+                      return Align(
+                        alignment: alignment,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                          decoration: BoxDecoration(
+                            color: bgColor,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(msg.text, style: TextStyle(color: textColor, fontSize: 16)),
                         ),
                       );
                     },
                   ),
                 ),
+                // Streaming indicator
+                if (_isStreaming)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: LinearProgressIndicator(
+                      backgroundColor: Colors.white54,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.blueAccent),
+                      minHeight: 4,
+                    ),
+                  ),
                 // Input field
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(30),
                     child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.4),
+                          color: Colors.white.withOpacity(0.25),
                           borderRadius: BorderRadius.circular(30),
-                          border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.15),
+                              blurRadius: 6,
+                              spreadRadius: 1,
+                            ),
+                          ],
                         ),
                         child: Row(
                           children: [
@@ -453,9 +555,15 @@ class _AssistantPageState extends State<AssistantPage> {
                                   : null,
                             ),
                             IconButton(
-                              icon: Icon(Icons.send, color: Colors.white),
+                              icon: Icon(_isStreaming ? Icons.stop : Icons.send, color: Colors.white),
                               onPressed: () => _sendMessage(_controller.text),
                             ),
+                            // Cancel button during streaming
+                            if (_isStreaming)
+                              TextButton(
+                                onPressed: _stopStreaming,
+                                child: Text('취소', style: TextStyle(color: Colors.white)),
+                              ),
                           ],
                         ),
                       ),
@@ -475,10 +583,12 @@ class _ChatMessage {
   final String text;
   final bool isUser;
   final bool isTyping;
+  final bool? isLog;
   final SummaryData? summaryData;
   final Map<String, dynamic>? categoryData;
   final RouteDetail? routeDetail;
   final List<FavoriteRouteModel>? favorites;
+  final String? tag;
 
   _ChatMessage({
     this.text = '',
@@ -487,6 +597,8 @@ class _ChatMessage {
     this.routeDetail,
     this.favorites,
     this.isTyping = false,
+    this.isLog = false,
     required this.isUser,
+    this.tag,
   });
 }

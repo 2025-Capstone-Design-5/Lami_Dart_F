@@ -40,14 +40,15 @@ class AgentService {
 
   /// Streams agent's thought/action logs via SSE.
   Stream<String> streamProcess({
-    required String userId,
     required String message,
   }) async* {
     // Log request to server for streaming
-    print('AgentService: streaming request to $_baseUrl/agent/process/stream with userId=$userId, message=$message');
-    final uri = Uri.parse('$_baseUrl/agent/process/stream?userId=${Uri.encodeComponent(userId)}&message=${Uri.encodeComponent(message)}');
-    final request = http.Request('GET', uri);
+    print('AgentService: streaming request to $_baseUrl/agent/chat/stream with input=$message');
+    final uri = Uri.parse('$_baseUrl/agent/chat/stream');
+    final request = http.Request('POST', uri);
+    request.headers['Content-Type'] = 'application/json';
     request.headers['Accept'] = 'text/event-stream';
+    request.body = jsonEncode({'input': message});
     final streamedResponse = await http.Client().send(request);
     final stream = streamedResponse.stream
         .transform(utf8.decoder)

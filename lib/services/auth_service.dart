@@ -103,17 +103,13 @@ class AuthService {
 
   /// Performs guest login via backend.
   Future<AuthResult> loginAsGuest() async {
-    final resp = await http.post(
-      Uri.parse('${getServerBaseUrl()}/auth/guest'),
-      headers: {'Content-Type': 'application/json'},
-    );
-    if (resp.statusCode != 200) {
-      throw Exception('Guest login failed: ${resp.body}');
-    }
-    final user = jsonDecode(resp.body)['data'] as Map<String, dynamic>;
-    return AuthResult(
-      name: user['name'] as String,
-      email: user['email'] as String,
-    );
+    // Generate a random guest ID and name locally
+    final rand = Random.secure();
+    final guestId = List<int>.generate(8, (_) => rand.nextInt(256)).map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final name = '게스트';
+    final email = 'guest_$guestId@local';
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('googleId', guestId);
+    return AuthResult(name: name, email: email);
   }
 } 
