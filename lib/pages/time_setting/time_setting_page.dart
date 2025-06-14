@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // SharedPreferences import 추가
 import '../../event_service.dart'; // EventService import 추가
 import '../../models/route_response.dart';
 import '../../models/summary_response.dart';
@@ -391,6 +392,10 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
                       final headers = <String, String>{
                         'Content-Type': 'application/json; charset=UTF-8',
                       };
+                      // 사용자 정보 가져오기
+                      final prefs = await SharedPreferences.getInstance();
+                      final googleId = prefs.getString('googleId') ?? '';
+                      
                       // Log values before submission
                       debugPrint('DEBUG Submit values -> departureName: $departureName, departureAddress: $departureAddress, destinationName: $destinationName, destinationAddress: $destinationAddress');
                       final body = jsonEncode({
@@ -399,6 +404,7 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
                         'date': dateString,
                         'time': timeString,
                         'arriveBy': false,
+                        'googleId': googleId, // 사용자 정보 추가
                       });
                       debugPrint('Request POST: $url');
                       debugPrint('Headers: $headers');

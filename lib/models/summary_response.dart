@@ -67,6 +67,9 @@ class RouteSummary {
   final String? cityCode;
   final String? departureStopId;
   final String? busId;
+  // 사용자별 상태 정보
+  bool? isFavorite;
+  bool? hasAlarm;
 
   RouteSummary({
     required this.category,
@@ -86,6 +89,8 @@ class RouteSummary {
     this.cityCode,
     this.departureStopId,
     this.busId,
+    this.isFavorite,
+    this.hasAlarm,
   });
 
   factory RouteSummary.fromJson(Map<String, dynamic> json) {
@@ -111,6 +116,8 @@ class RouteSummary {
       cityCode: json['cityCode'] != null ? json['cityCode'].toString() : null,
       departureStopId: json['departureStopId'] != null ? json['departureStopId'].toString() : null,
       busId: json['busId'] != null ? json['busId'].toString() : null,
+      isFavorite: json['isFavorite'] as bool?,
+      hasAlarm: json['hasAlarm'] as bool?,
     );
   }
 
@@ -133,6 +140,8 @@ class RouteSummary {
       'cityCode': cityCode,
       'departureStopId': departureStopId,
       'busId': busId,
+      'isFavorite': isFavorite,
+      'hasAlarm': hasAlarm,
     };
   }
 } 

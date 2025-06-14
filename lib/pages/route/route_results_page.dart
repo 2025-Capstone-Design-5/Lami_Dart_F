@@ -9,24 +9,32 @@ import 'dart:convert';
 import 'package:untitled4/route_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:untitled4/config/server_config.dart';
+import 'package:untitled4/pages/assistant/assistant_page.dart';
 
 /// RouteResultsPage: SummaryData를 받아 여러 경로 옵션을 탭별로 보여주는 페이지
-class RouteResultsPage extends StatelessWidget {
+class RouteResultsPage extends StatefulWidget {
   final SummaryData summaryData;
 
   const RouteResultsPage({Key? key, required this.summaryData})
       : super(key: key);
 
   @override
+  State<RouteResultsPage> createState() => _RouteResultsPageState();
+}
+
+class _RouteResultsPageState extends State<RouteResultsPage> {
+  SummaryData get summaryData => widget.summaryData;
+
+  @override
   Widget build(BuildContext context) {
     // 1) 탭 목록과 각 탭에 해당하는 경로 리스트 생성
     final tabs = ['도보', '자동차', '버스', '지하철', '버스+지하철'];
     final lists = <List<dynamic>>[
-      summaryData.routes.where((r) => r.category == 'walk').toList(),
-      summaryData.routes.where((r) => r.category == 'car').toList(),
-      summaryData.routes.where((r) => r.category == 'bus').toList(),
-      summaryData.routes.where((r) => r.category == 'subway').toList(),
-      summaryData.routes.where((r) => r.category == 'bus_subway').toList(),
+      widget.summaryData.routes.where((r) => r.category == 'walk').toList(),
+      widget.summaryData.routes.where((r) => r.category == 'car').toList(),
+      widget.summaryData.routes.where((r) => r.category == 'bus').toList(),
+      widget.summaryData.routes.where((r) => r.category == 'subway').toList(),
+      widget.summaryData.routes.where((r) => r.category == 'bus_subway').toList(),
     ];
 
     return DefaultTabController(
@@ -102,7 +110,7 @@ class RouteResultsPage extends StatelessWidget {
                         Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => RouteDetailPage.fromSummaryKey(
-                              summaryKey: summaryData.summaryKey,
+                              summaryKey: widget.summaryData.summaryKey,
                               category: option.category,
                               index: index,
                             ),
@@ -170,83 +178,28 @@ class RouteResultsPage extends StatelessWidget {
                                   Positioned(
                                     right: 0,
                                     top: 0,
-                                    child: IconButton(
-                                      icon: Icon(Icons.notifications, color: Colors.grey.shade700),
-                                      onPressed: () async {
-                                        // "벨 아이콘 탭" → 상세 조회 후 저장 로직
-                                        final String baseUrl = getServerBaseUrl();
-                                        debugPrint('[RouteResultsPage] bell using baseUrl: $baseUrl');
-                                        final detailUrl = Uri.parse('$baseUrl/traffic/routes/detail');
-                                        debugPrint('[RouteResultsPage] bell detail URL: $detailUrl');
-                                        final requestPayload = {
-                                          'summaryKey': summaryData.summaryKey,
-                                          'category': option.category,
-                                          'index': index,
-                                        };
-                                        debugPrint('[RouteResultsPage] Bell request payload: ${jsonEncode(requestPayload)}');
-                                        final detailResp = await http.post(
-                                          detailUrl,
-                                          headers: {'Content-Type': 'application/json'},
-                                          body: jsonEncode(requestPayload),
-                                        );
-                                        debugPrint('[RouteResultsPage] bell response status: ${detailResp.statusCode}, body: ${detailResp.body}');
-                                        if (detailResp.statusCode >= 200 && detailResp.statusCode < 300) {
-                                          final detailData = RouteDetailResponse.parse(detailResp.body).data;
-                                          RouteStore.selectedOption = detailData;
-
-                                          // Load stored Google ID for identifying the user
-                                          final prefs = await SharedPreferences.getInstance();
-                                          final googleId = prefs.getString('googleId') ?? '';
-                                          // Construct payload matching backend SavedRoute schema
-                                          final savePayload = {
-                                            'googleId': googleId,
-                                            'origin': summaryData.origin,
-                                            'destination': summaryData.destination,
-                                            'arrivalTime': DateTime.now().toIso8601String(),
-                                            'preparationTime': 0,
-                                            'options': {},
-                                            // 서비스 카테고리: general, home, work, school 등
-                                            'category': 'general',
-                                            'summary': option.toJson(),
-                                            'detail': detailData.toJson(),
-                                          };
-                                          try {
-                                            final saveResp = await http.post(
-                                              Uri.parse('$baseUrl/traffic/routes/save'),
-                                              headers: {'Content-Type': 'application/json'},
-                                              body: jsonEncode(savePayload),
-                                            );
-                                            if (saveResp.statusCode >= 200 && saveResp.statusCode < 300) {
-                                              final now = DateTime.now();
-                                              EventService().addEventWithDetails(
-                                                now,
-                                                '경로: ${summaryData.origin} → ${summaryData.destination}',
-                                                title: '저장된 경로',
-                                                time: DateFormat('HH:mm').format(now),
-                                              );
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                const SnackBar(content: Text('경로가 저장되었습니다.')),
-                                              );
-                                            } else {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                SnackBar(content: Text('경로 저장 실패: ${saveResp.statusCode}')),
-                                              );
-                                            }
-                                          } catch (e) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(content: Text('서버 통신 오류')),
-                                            );
-                                          }
-                                          // 화면 팝(Pop) 연쇄
-                                          Navigator.of(context).pop();
-                                          Navigator.of(context).pop();
-                                          Navigator.of(context).pop();
-                                        } else {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text('상세 조회 실패: ${detailResp.statusCode}')),
-                                          );
-                                        }
-                                      },
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        // 즐겨찾기 버튼
+                                        IconButton(
+                                          icon: Icon(
+                                            option.isFavorite == true ? Icons.favorite : Icons.favorite_border,
+                                            color: option.isFavorite == true ? Colors.red : Colors.grey.shade700,
+                                          ),
+                                          onPressed: () async {
+                                            await _handleFavoriteAction(option, widget.summaryData, index);
+                                          },
+                                        ),
+                                        // 알람 버튼 (상세 설정 생략)
+                                        IconButton(
+                                          icon: const Icon(Icons.alarm, color: Colors.deepOrange),
+                                          tooltip: '이 경로로 알림 설정',
+                                          onPressed: () async {
+                                            await _handleAlarmAction(option, widget.summaryData, index);
+                                          },
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
@@ -579,6 +532,131 @@ class RouteResultsPage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // 즐겨찾기 액션 처리
+  Future<void> _handleFavoriteAction(RouteSummary option, SummaryData summaryData, int index) async {
+    final String baseUrl = getServerBaseUrl();
+    final detailUrl = Uri.parse('$baseUrl/traffic/routes/detail');
+    
+    // 먼저 상세 정보 조회
+    final requestPayload = {
+      'summaryKey': summaryData.summaryKey,
+      'category': option.category,
+      'index': index,
+    };
+    
+    final detailResp = await http.post(
+      detailUrl,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(requestPayload),
+    );
+    
+    if (detailResp.statusCode >= 200 && detailResp.statusCode < 300) {
+      final detailData = RouteDetailResponse.parse(detailResp.body).data;
+      final prefs = await SharedPreferences.getInstance();
+      final googleId = prefs.getString('googleId') ?? '';
+      
+      // 즐겨찾기 토글 - 서버에서 토글 처리
+      const action = 'favorite';
+      
+      final quickActionPayload = {
+        'googleId': googleId,
+        'origin': summaryData.origin,
+        'destination': summaryData.destination,
+        'arrivalTime': DateTime.now().toIso8601String(),
+        'category': 'general',
+        'summary': option.toJson(),
+        'detail': detailData.toJson(),
+        'action': action,
+      };
+      
+      try {
+        final resp = await http.post(
+          Uri.parse('$baseUrl/traffic/routes/quick-action'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(quickActionPayload),
+        );
+        
+        if (resp.statusCode >= 200 && resp.statusCode < 300) {
+          setState(() {
+            // UI 상태 업데이트
+            option.isFavorite = !(option.isFavorite ?? false);
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(option.isFavorite == true ? '즐겨찾기에 추가되었습니다.' : '즐겨찾기에서 제거되었습니다.')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('즐겨찾기 처리 실패: ${resp.statusCode}')),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('서버 통신 오류')),
+        );
+      }
+    }
+  }
+
+  // 간단 알람 액션 처리 (상세 설정 생략)
+  Future<void> _handleAlarmAction(RouteSummary option, SummaryData summaryData, int index) async {
+    final String baseUrl = getServerBaseUrl();
+    final detailUrl = Uri.parse('$baseUrl/traffic/routes/detail');
+    final requestPayload = {
+      'summaryKey': summaryData.summaryKey,
+      'category': option.category,
+      'index': index,
+    };
+    try {
+      final detailResp = await http.post(
+        detailUrl,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(requestPayload),
+      );
+      if (detailResp.statusCode >= 200 && detailResp.statusCode < 300) {
+        final detailData = RouteDetailResponse.parse(detailResp.body).data;
+        final prefs = await SharedPreferences.getInstance();
+        final googleId = prefs.getString('googleId') ?? '';
+
+        // 서버에서 알람 설정을 처리하도록 quick-action 호출
+        final quickActionPayload = {
+          'googleId': googleId,
+          'origin': summaryData.origin,
+          'destination': summaryData.destination,
+          'arrivalTime': DateTime.now().toIso8601String(),
+          'category': 'general',
+          'summary': option.toJson(),
+          'detail': detailData.toJson(),
+          'action': 'alarm',
+        };
+        final resp = await http.post(
+          Uri.parse('$baseUrl/traffic/routes/quick-action'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(quickActionPayload),
+        );
+        if (resp.statusCode >= 200 && resp.statusCode < 300) {
+          setState(() {
+            option.hasAlarm = true;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('알람이 설정되었습니다.')),
+          );
+          // 홈 알람 위젯 갱신
+          if (globalAlarmRefreshCallback != null) {
+            globalAlarmRefreshCallback!();
+          }
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('알람 설정 실패: ${resp.statusCode}')),
+          );
+        }
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('서버 통신 오류')),
+      );
+    }
   }
 }
 
