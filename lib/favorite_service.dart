@@ -233,4 +233,24 @@ class FavoriteService extends ChangeNotifier {
       return null;
     }
   }
+  
+  // 모든 즐겨찾기 삭제
+  Future<void> removeAllFavorites() async {
+    final prefs = await SharedPreferences.getInstance();
+    final googleId = prefs.getString('googleId');
+    if (googleId == null) return;
+    
+    // 즉시 UI에서 모든 즐겨찾기 삭제하여 반응성 향상
+    _favoriteList.clear();
+    notifyListeners();
+    
+    try {
+      // 서버에서 모든 즐겨찾기 삭제 요청 (비동기로 처리)
+      await FavoriteApiService(googleId: googleId).removeAllFavorites();
+    } catch (e) {
+      debugPrint('모든 즐겨찾기 삭제 에러: $e');
+      // 에러 발생 시 최신 데이터 다시 로드
+      await loadData();
+    }
+  }
 }

@@ -180,4 +180,36 @@ class FavoriteApiService {
       }
     });
   }
+  
+  /// 모든 즐겨찾기를 삭제합니다.
+  Future<void> removeAllFavorites() async {
+    // 먼저 로컬에서 모든 즐겨찾기 삭제 (UI 반응성 향상)
+    _removeAllLocalFavorites();
+    
+    try {
+      final uri = Uri.parse('$baseUrl/traffic/routes/favorites/all?googleId=$googleId');
+      // 타임아웃 시간을 3초로 단축
+      final resp = await http.delete(uri).timeout(const Duration(seconds: 3));
+      
+      if (resp.statusCode < 200 || resp.statusCode >= 300) {
+        print('서버 응답 오류: ${resp.statusCode} - ${resp.body}');
+      }
+    } catch (e) {
+      print('서버 연결 실패, 로컬에서 모든 즐겨찾기 삭제 완료: $e');
+    }
+  }
+  
+  // 로컬 저장소에서 모든 즐겨찾기 삭제
+  Future<void> _removeAllLocalFavorites() async {
+    // 백그라운드에서 처리
+    Future.microtask(() async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_localFavoritesKey);
+        print('로컬 즐겨찾기 전체 삭제 완료');
+      } catch (e) {
+        print('로컬 즐겨찾기 전체 삭제 오류: $e');
+      }
+    });
+  }
 }
