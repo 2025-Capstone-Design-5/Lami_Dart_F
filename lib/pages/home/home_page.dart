@@ -539,13 +539,16 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _goToShortestRoutePage() {
-    // 선택된 경로가 없으면 안내 메시지
-    if (RouteStore.selectedOption == null) {
+    // 저장된 경로 ID가 없으면 안내 메시지
+    final routeId = RouteStore.selectedRouteId;
+    if (routeId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('먼저 경로를 선택해주세요')),
+        const SnackBar(content: Text('먼저 경로를 저장해주세요')),
       );
       return;
     }
+    // 서버에서 상세 경로 조회 및 상세 페이지로 이동
+    RouteStore.fetchRouteDetailAndShow(context, routeId);
   }
 
   void _goToTimeSettingPage() {

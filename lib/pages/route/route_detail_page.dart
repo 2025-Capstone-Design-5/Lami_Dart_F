@@ -102,43 +102,163 @@ class RouteDetailPage extends StatelessWidget {
   }
 
   Widget _buildDetail(BuildContext context, RouteOption option) {
+    final main = option.main;
+    // 1) calculate total minutes
+    final totalMin = (main.duration / 60).ceil();
+
+    // 2) build segment list for bar
+    final walkDurations = List<int>.from(main.walkDurations);
+    final transitDurations = List<int>.from(main.transitDurations);
+    final modes = List<String>.from(main.modes);
+    final segments = <_Segment>[];
+    for (var m in modes) {
+      final modeUpper = m.toUpperCase();
+      final secs = modeUpper == 'WALK'
+          ? (walkDurations.isNotEmpty ? walkDurations.removeAt(0) : 0)
+          : (transitDurations.isNotEmpty ? transitDurations.removeAt(0) : 0);
+      String segMode;
+      if (modeUpper == 'WALK') segMode = 'WALK';
+      else if (modeUpper == 'BUS' || modeUpper == 'TRAM') segMode = 'BUS';
+      else if (modeUpper == 'SUBWAY' || modeUpper == 'RAIL') segMode = 'SUBWAY';
+      else segMode = modeUpper;
+      segments.add(_Segment(mode: segMode, seconds: secs));
+    }
+    final totalSeconds = segments.fold<int>(0, (sum, s) => sum + s.seconds);
+    final safeTotal = totalSeconds == 0 ? 1.0 : totalSeconds.toDouble();
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('상세 경로'),
+        title: Text('${main.origin} → ${main.destination}'),
       ),
-      body: ListView.builder(
-        itemCount: option.sub.length,
-        itemBuilder: (context, index) {
-          final leg = option.sub[index];
-          final mode = leg.mode;
-          final icon = _getIcon(mode);
-          final from = leg.from;
-          final to = leg.to;
-          final depTime = from.departure != null
-              ? DateTime.fromMillisecondsSinceEpoch(from.departure!)
-              : null;
-          final arrTime = to.arrival != null
-              ? DateTime.fromMillisecondsSinceEpoch(to.arrival!)
-              : null;
-          String timeRange = '';
-          if (depTime != null && arrTime != null) {
-            final start = DateFormat('a h:mm', 'ko').format(depTime);
-            final end = DateFormat('a h:mm', 'ko').format(arrTime);
-            timeRange = '$start ~ $end';
-          }
-          return ExpansionTile(
-            leading: Icon(icon, color: Theme.of(context).primaryColor),
-            title: Text('${from.name} → ${to.name}'),
-            subtitle: Text(timeRange),
-            children: leg.steps
-                .map((step) => ListTile(
-                      leading: const Icon(Icons.circle, size: 8),
-                      title: Text(step.streetName),
-                      trailing: Text('${step.distance.toStringAsFixed(0)}m'),
-                    ))
-                .toList(),
-          );
-        },
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header: total time
+              Row(
+                children: [
+                  Text('$totalMin분', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Segment bar
+              SizedBox(
+                height: 24,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final totalWidth = constraints.maxWidth;
+                    final count = segments.length;
+                    const minWidth = 40.0;
+                    final rawWidths = segments.map((s) => (s.seconds / safeTotal) * totalWidth).toList();
+                    final widths = List<double>.filled(count, 0);
+                    double usedMin = 0, restSecs = 0; final flexIdx = <int>[];
+                    for (int i = 0; i < count; i++) {
+                      if (rawWidths[i] < minWidth) { widths[i] = minWidth; usedMin += minWidth; }
+                      else { flexIdx.add(i); restSecs += segments[i].seconds; }
+                    }
+                    final remWidth = (totalWidth - usedMin).clamp(0.0, double.infinity);
+                    double acc = 0;
+                    for (int k = 0; k < flexIdx.length; k++) {
+                      final i = flexIdx[k];
+                      final w = (k == flexIdx.length - 1)
+                          ? (remWidth - acc)
+                          : (segments[i].seconds / restSecs) * remWidth;
+                      widths[i] = w; acc += w;
+                    }
+                    return Row(
+                      children: List.generate(count, (i) {
+                        final seg = segments[i];
+                        final bool isFirst = i == 0;
+                        final bool isLast = i == count - 1;
+                        Color bg;
+                        switch (seg.mode) {
+                          case 'BUS': bg = Colors.blue; break;
+                          case 'SUBWAY': bg = Colors.purple; break;
+                          default: bg = Colors.grey.shade300;
+                        }
+                        BorderRadius radius = BorderRadius.zero;
+                        if (isFirst && isLast) radius = BorderRadius.circular(12);
+                        else if (isFirst) radius = const BorderRadius.only(topLeft: Radius.circular(12), bottomLeft: Radius.circular(12));
+                        else if (isLast) radius = const BorderRadius.only(topRight: Radius.circular(12), bottomRight: Radius.circular(12));
+                        return Container(
+                          width: widths[i], height: 24,
+                          decoration: BoxDecoration(color: bg, borderRadius: radius), padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Center(child: Text('${(seg.seconds / 60).ceil()}분', style: TextStyle(fontSize: 12, color: seg.mode == 'WALK' ? Colors.grey.shade800 : Colors.white))),
+                        );
+                      }),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 24),
+              // 각 구간별 정류장 타임라인 (출발지 → 경유 → 도착지)
+              ...option.sub.map((leg) {
+                // 출발, 경유, 도착 리스트 구성
+                final stopsList = [leg.from, ...leg.intermediateStops, leg.to];
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('구간: ${leg.mode}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    ...List.generate(stopsList.length, (i) {
+                      final place = stopsList[i];
+                      final bool isFirst = i == 0;
+                      final bool isLast = i == stopsList.length - 1;
+                      final IconData icon = isFirst
+                        ? Icons.play_circle_fill
+                        : isLast
+                          ? Icons.stop_circle
+                          : Icons.radio_button_checked;
+                      final Color iconColor = isFirst
+                        ? Colors.green
+                        : isLast
+                          ? Colors.red
+                          : Colors.grey;
+                      final String label = isFirst
+                        ? '출발지: ${place.name}'
+                        : isLast
+                          ? '도착지: ${place.name}'
+                          : place.name;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Column(
+                              children: [
+                                Icon(icon, size: 20, color: iconColor),
+                                if (!isLast) Container(width: 2, height: 40, color: Colors.grey.shade300),
+                              ],
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                                decoration: BoxDecoration(
+                                  color: isFirst
+                                    ? Colors.green.shade50
+                                    : isLast
+                                      ? Colors.red.shade50
+                                      : Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(label, style: TextStyle(fontSize: 14, color: isFirst || isLast ? iconColor : Colors.black87)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 16),
+                  ],
+                );
+              }).toList(),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -157,4 +277,11 @@ class RouteDetailPage extends StatelessWidget {
         return Icons.directions;
     }
   }
+}
+
+// Helper for detail segment bar
+class _Segment {
+  final String mode;
+  final int seconds;
+  _Segment({required this.mode, required this.seconds});
 } 

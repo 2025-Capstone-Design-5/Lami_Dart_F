@@ -599,7 +599,7 @@ class _RouteResultsPageState extends State<RouteResultsPage> {
     }
   }
 
-  // 간단 알람 액션 처리 (상세 설정 생략)
+  // 알람 액션 처리
   Future<void> _handleAlarmAction(RouteSummary option, SummaryData summaryData, int index) async {
     final String baseUrl = getServerBaseUrl();
     final detailUrl = Uri.parse('$baseUrl/traffic/routes/detail');
@@ -608,53 +608,54 @@ class _RouteResultsPageState extends State<RouteResultsPage> {
       'category': option.category,
       'index': index,
     };
-    try {
-      final detailResp = await http.post(
-        detailUrl,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(requestPayload),
-      );
-      if (detailResp.statusCode >= 200 && detailResp.statusCode < 300) {
-        final detailData = RouteDetailResponse.parse(detailResp.body).data;
-        final prefs = await SharedPreferences.getInstance();
-        final googleId = prefs.getString('googleId') ?? '';
-
-        // 서버에서 알람 설정을 처리하도록 quick-action 호출
-        final quickActionPayload = {
-          'googleId': googleId,
-          'origin': summaryData.origin,
-          'destination': summaryData.destination,
-          'arrivalTime': DateTime.now().toIso8601String(),
-          'category': 'general',
-          'summary': option.toJson(),
-          'detail': detailData.toJson(),
-          'action': 'alarm',
-        };
+    final detailResp = await http.post(
+      detailUrl,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(requestPayload),
+    );
+    if (detailResp.statusCode >= 200 && detailResp.statusCode < 300) {
+      final detailData = RouteDetailResponse.parse(detailResp.body).data;
+      final prefs = await SharedPreferences.getInstance();
+      final googleId = prefs.getString('googleId') ?? '';
+      const action = 'alarm';
+      final quickActionPayload = {
+        'googleId': googleId,
+        'origin': summaryData.origin,
+        'destination': summaryData.destination,
+        'arrivalTime': DateTime.now().toIso8601String(),
+        'category': option.category,
+        'summary': option.toJson(),
+        'detail': detailData.toJson(),
+        'action': action,
+      };
+      try {
         final resp = await http.post(
           Uri.parse('$baseUrl/traffic/routes/quick-action'),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode(quickActionPayload),
         );
         if (resp.statusCode >= 200 && resp.statusCode < 300) {
-          setState(() {
-            option.hasAlarm = true;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('알람이 설정되었습니다.')),
-          );
-          // 홈 알람 위젯 갱신
-          if (globalAlarmRefreshCallback != null) {
-            globalAlarmRefreshCallback!();
-          }
+          final respJson = json.decode(resp.body) as Map<String, dynamic>;
+          final savedRouteId = respJson['savedRouteId'] as String?;
+          // 저장된 routeId를 보관
+          RouteStore.selectedRouteId = savedRouteId;
+          final message = respJson['message'] as String? ?? '알람이 설정되었습니다.';
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+          // 홈 화면으로 돌아가기
+          Navigator.of(context).popUntil((route) => route.isFirst);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('알람 설정 실패: ${resp.statusCode}')),
+            SnackBar(content: Text('알람 처리 실패: ${resp.statusCode}')),
           );
         }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('서버 통신 오류')),
+        );
       }
-    } catch (e) {
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('서버 통신 오류')),
+        SnackBar(content: Text('상세 경로 조회 실패: ${detailResp.statusCode}')),
       );
     }
   }
