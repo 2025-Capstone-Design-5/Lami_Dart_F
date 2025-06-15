@@ -67,6 +67,8 @@ class _HomePageState extends State<HomePage> {
   String? _currentAlarmId;
   // Currently scheduled local notification ID
   int? _notificationId;
+  // Wake-up time local notification ID
+  int? _wakeNotificationId;
 
   // 알람 등록 시 홈 알람 위젯 갱신 콜백
   VoidCallback? globalAlarmRefreshCallback;
@@ -165,6 +167,36 @@ class _HomePageState extends State<HomePage> {
           },
         );
       }
+      // Schedule local notifications for this alarm
+      if (wakeUpTime.isAfter(now)) {
+        // Cancel previously scheduled notifications
+        if (_notificationId != null) {
+          await NotificationService.cancelNotification(_notificationId!);
+        }
+        if (_wakeNotificationId != null) {
+          await NotificationService.cancelNotification(_wakeNotificationId!);
+        }
+        // Prepare timings
+        final startDt = wakeUpTime.subtract(preparationTime);
+        final alarmTimeStr = _getAlarmTimeString();
+        final now2 = DateTime.now();
+        if (startDt.isAfter(now2)) {
+          _notificationId = startDt.millisecondsSinceEpoch ~/ 1000;
+          await NotificationService.scheduleNotification(
+            id: _notificationId!,
+            title: '⏰ 알람: $alarmTimeStr 도착 준비',
+            body: '준비시간: ${preparationTime.inMinutes}분\n도착 예정: $alarmTimeStr',
+            scheduledDate: startDt,
+          );
+        }
+        _wakeNotificationId = wakeUpTime.millisecondsSinceEpoch ~/ 1000;
+        await NotificationService.scheduleNotification(
+          id: _wakeNotificationId!,
+          title: '⏰ 준비할 시간입니다',
+          body: '설정된 도착 시간($alarmTimeStr)에 맞춰 준비하세요.',
+          scheduledDate: wakeUpTime,
+        );
+      }
     } catch (e) {
       print('알람 조회 실패: $e');
     }
@@ -229,24 +261,31 @@ class _HomePageState extends State<HomePage> {
         preparationTime: preparationTime.inMinutes,
       );
       
+      // Compute notification timings
+      final startDt = arrivalDateTime.subtract(preparationTime);
+      final arrivalTimeStr = '${arrivalPeriod} ${arrivalHour}:${arrivalMinute.toString().padLeft(2, '0')}';
+
       // Google Calendar에 일정 추가
       try {
         if (!CalendarService.isSignedIn()) {
           await CalendarService.signIn();
         }
-        
-        final startDt = arrivalDateTime.subtract(preparationTime);
-        final arrivalTimeStr = '${arrivalPeriod} ${arrivalHour}:${arrivalMinute.toString().padLeft(2, '0')}';
-        
+
         await CalendarService.addEvent(
           summary: '⏰ 알람: ${arrivalTimeStr} 도착 준비',
           start: startDt,
           end: arrivalDateTime,
           description: '준비시간: ${preparationTime.inMinutes}분\n도착 예정: $arrivalTimeStr',
         );
-        
+
         print('✅ 홈 알람 - Google Calendar 일정 추가 성공!');
-        // 로컬 알림 스케줄링
+      } catch (e) {
+        print('❌ 홈 알람 - 캘린더 추가 실패: $e');
+      }
+
+      // Schedule local notifications regardless of CalendarService result
+      final now2 = DateTime.now();
+      if (startDt.isAfter(now2)) {
         _notificationId = startDt.millisecondsSinceEpoch ~/ 1000;
         await NotificationService.scheduleNotification(
           id: _notificationId!,
@@ -254,10 +293,14 @@ class _HomePageState extends State<HomePage> {
           body: '준비시간: ${preparationTime.inMinutes}분\n도착 예정: $arrivalTimeStr',
           scheduledDate: startDt,
         );
-      } catch (e) {
-        print('❌ 홈 알람 - 캘린더 추가 실패: $e');
-        // 캘린더 추가 실패해도 알람은 정상 동작하도록
       }
+      _wakeNotificationId = arrivalDateTime.millisecondsSinceEpoch ~/ 1000;
+      await NotificationService.scheduleNotification(
+        id: _wakeNotificationId!,
+        title: '⏰ 준비할 시간입니다',
+        body: '설정된 도착 시간($arrivalTimeStr)에 맞춰 준비하세요.',
+        scheduledDate: arrivalDateTime,
+      );
     } catch (e) {
       print('알람 서버 등록 실패: $e');
     }
@@ -299,6 +342,10 @@ class _HomePageState extends State<HomePage> {
     if (_notificationId != null) {
       await NotificationService.cancelNotification(_notificationId!);
       _notificationId = null;
+    }
+    if (_wakeNotificationId != null) {
+      await NotificationService.cancelNotification(_wakeNotificationId!);
+      _wakeNotificationId = null;
     }
     // Delete from server
     if (_currentAlarmId != null) {
@@ -666,14 +713,17 @@ class _HomePageState extends State<HomePage> {
       MaterialPageRoute(
         builder: (context) => TimeSettingPage(
           onPrepTimeSet: setPrepTime,
-          onArrivalTimeSet: setArrivalTime, // 도착시간 설정 콜백
+          onArrivalTimeSet: setArrivalTime,
           initialArrivalPeriod: arrivalPeriod,
           initialArrivalHour: arrivalHour,
           initialArrivalMinute: arrivalMinute,
           initialPrepTime: preparationTime,
         ),
       ),
-    );
+    ).then((_) {
+      _loadAlarms();
+      setState(() {});
+    });
   }
 
   // 캘린더 페이지로 이동
