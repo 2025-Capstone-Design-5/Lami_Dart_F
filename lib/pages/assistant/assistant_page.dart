@@ -78,9 +78,21 @@ class _AssistantPageState extends State<AssistantPage> {
         _controller.text = _lastWords;
       });
     });
+    // Notify in chat that microphone is on
+    setState(() {
+      _messages.add(_ChatMessage(text: '🔊 마이크 켜짐', isLog: true, isUser: false, tag: '시스템'));
+    });
+    _scrollToBottom();
   }
 
-  void _stopListening() => _speech.stop();
+  void _stopListening() {
+    _speech.stop();
+    // Notify in chat that microphone is off
+    setState(() {
+      _messages.add(_ChatMessage(text: '🔇 마이크 꺼짐', isLog: true, isUser: false, tag: '시스템'));
+    });
+    _scrollToBottom();
+  }
 
   Future<void> _loadGoogleId() async {
     final prefs = await SharedPreferences.getInstance();
@@ -992,25 +1004,24 @@ class _AssistantPageState extends State<AssistantPage> {
                                 onSubmitted: _sendMessage,
                               ),
                             ),
+                            // Microphone toggle button
                             IconButton(
-                              icon: Icon(
-                                _speech.isListening ? Icons.mic : Icons.mic_none,
-                                color: Colors.white,
-                              ),
+                              icon: Icon(_speech.isListening ? Icons.mic : Icons.mic_none, color: Colors.white, size: 24),
                               onPressed: _speechEnabled
                                   ? (_speech.isListening ? _stopListening : _startListening)
                                   : null,
                             ),
+                            // Send or Cancel streaming button
                             IconButton(
-                              icon: Icon(_isStreaming ? Icons.stop : Icons.send, color: Colors.white),
-                              onPressed: () => _sendMessage(_controller.text),
+                              icon: Icon(_isStreaming ? Icons.cancel : Icons.send, color: Colors.white, size: 24),
+                              onPressed: () {
+                                if (_isStreaming) {
+                                  _stopStreaming();
+                                } else {
+                                  _sendMessage(_controller.text);
+                                }
+                              },
                             ),
-                            // Cancel button during streaming
-                            if (_isStreaming)
-                              TextButton(
-                                onPressed: _stopStreaming,
-                                child: Text('취소', style: TextStyle(color: Colors.white)),
-                              ),
                           ],
                         ),
                       ),
