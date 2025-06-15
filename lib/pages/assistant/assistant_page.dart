@@ -186,7 +186,30 @@ class _AssistantPageState extends State<AssistantPage> {
             _scrollToBottom();
             break;
           case 'action_result':
-            // No-op: skip action_result events
+            // Display tool execution results
+            try {
+              final resultMap = payload as Map<String, dynamic>;
+              final toolName = resultMap['tool'] as String? ?? '';
+              final toolResult = resultMap['result'];
+              final logText = '✅ $toolName 결과: $toolResult';
+              setState(() {
+                _messages.add(
+                  _ChatMessage(
+                    text: logText,
+                    isLog: true,
+                    isUser: false,
+                    tag: '결과',
+                  ),
+                );
+              });
+              _scrollToBottom();
+            } catch (_) {
+              // Fallback: show raw payload
+              setState(() {
+                _messages.add(_ChatMessage(text: payload.toString(), isLog: true, isUser: false, tag: '결과'));
+              });
+              _scrollToBottom();
+            }
             break;
           case 'observation':
             final obsText = payload is String ? payload : json.encode(payload);
@@ -324,7 +347,36 @@ class _AssistantPageState extends State<AssistantPage> {
                     _scrollToBottom();
                     break;
                   case 'action_result':
-                    // skip or handle as needed
+                    // Display tool execution results from token stream
+                    try {
+                      final innerMap = innerPayload as Map<String, dynamic>;
+                      final toolName2 = innerMap['tool'] as String? ?? '';
+                      final toolResult2 = innerMap['result'];
+                      final logText2 = '✅ $toolName2 결과: $toolResult2';
+                      setState(() {
+                        _messages.add(
+                          _ChatMessage(
+                            text: logText2,
+                            isLog: true,
+                            isUser: false,
+                            tag: '결과',
+                          ),
+                        );
+                      });
+                      _scrollToBottom();
+                    } catch (_) {
+                      setState(() {
+                        _messages.add(
+                          _ChatMessage(
+                            text: innerPayload.toString(),
+                            isLog: true,
+                            isUser: false,
+                            tag: '결과',
+                          ),
+                        );
+                      });
+                      _scrollToBottom();
+                    }
                     break;
                   case 'observation':
                     final obsText = innerPayload is String ? innerPayload : json.encode(innerPayload);
@@ -670,15 +722,207 @@ class _AssistantPageState extends State<AssistantPage> {
                       if (msg.isTyping) {
                         return SizedBox.shrink();
                       }
-                      // Display logs and intermediate events as plain text
-                      if (!msg.isUser && msg.tag != '결과') {
+                      // Display structured log messages
+                      if (!msg.isUser && msg.isLog == true) {
+                        // Map tag to icon, color, display label, and sizes
+                        IconData leadingIcon;
+                        Color bgColor;
+                        String displayTag;
+                        double iconSize;
+                        double labelSize;
+                        switch (msg.tag) {
+                          case '추론':
+                            leadingIcon = Icons.lightbulb_outline;
+                            bgColor = Colors.deepPurple;
+                            displayTag = '추론';
+                            iconSize = 28;
+                            labelSize = 16;
+                            break;
+                          case '관찰':
+                            leadingIcon = Icons.remove_red_eye;
+                            bgColor = Colors.deepOrange;
+                            displayTag = '관찰';
+                            iconSize = 28;
+                            labelSize = 16;
+                            break;
+                          case '결과':
+                            leadingIcon = Icons.check_circle_outline;
+                            bgColor = Colors.greenAccent;
+                            displayTag = '결과';
+                            iconSize = 28;
+                            labelSize = 16;
+                            break;
+                          case 'route-summary':
+                            leadingIcon = Icons.alt_route;
+                            bgColor = Colors.lightBlueAccent;
+                            displayTag = '경로 조회';
+                            iconSize = 24;
+                            labelSize = 14;
+                            break;
+                          case 'fallback':
+                            leadingIcon = Icons.chat_bubble_outline;
+                            bgColor = Colors.grey;
+                            displayTag = '일반 대화';
+                            iconSize = 24;
+                            labelSize = 14;
+                            break;
+                          default:
+                            leadingIcon = Icons.build;
+                            bgColor = Colors.teal;
+                            displayTag = msg.tag ?? '';
+                            iconSize = 24;
+                            labelSize = 14;
+                            break;
+                        }
+                        // Descriptive text for each log type
+                        String descText;
+                        switch (msg.tag) {
+                          case '추론':
+                            descText = '사고 과정을 나타냅니다.';
+                            break;
+                          case '관찰':
+                            descText = '관찰 정보를 나타냅니다.';
+                            break;
+                          case '결과':
+                            descText = '도구 실행 결과를 표시합니다.';
+                            break;
+                          case 'route-summary':
+                            descText = '경로 조회 도구를 호출합니다.';
+                            break;
+                          case 'fallback':
+                            descText = '일반 대화 도구를 호출합니다.';
+                            break;
+                          default:
+                            descText = '로그 메시지입니다.';
+                            break;
+                        }
+                        // Split log into segments by bullets or newlines
+                        final parts = msg.text.split(RegExp(r'•\s*|\n')).map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+                        final List<Widget> contentWidgets = [];
+                        bool inCodeBlock = false;
+                        for (var part in parts) {
+                          if (part.startsWith('```')) {
+                            inCodeBlock = !inCodeBlock;
+                            continue;
+                          }
+                          if (inCodeBlock) {
+                            contentWidgets.add(
+                              Container(
+                                width: double.infinity,
+                                color: Colors.black.withOpacity(0.2),
+                                padding: const EdgeInsets.all(6),
+                                child: Text(
+                                  part,
+                                  style: TextStyle(
+                                    fontFamily: 'monospace',
+                                    color: Colors.white70,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            );
+                          } else if (part.startsWith('입력:')) {
+                            // Input section with label
+                            contentWidgets.add(_buildIconSection(
+                              Icons.login,
+                              '입력',
+                              part.substring('입력:'.length).trim(),
+                              bgColor,
+                            ));
+                          } else if (part.startsWith('이유:')) {
+                            // Strip '이유:' and parse embedded question
+                            final stripped = part.substring('이유:'.length).trim();
+                            if (stripped.startsWith('Question:') || stripped.startsWith('질문:')) {
+                              final text = stripped.startsWith('Question:')
+                                  ? stripped.substring('Question:'.length).trim()
+                                  : stripped.substring('질문:'.length).trim();
+                              contentWidgets.add(_buildIconSection(
+                                Icons.help_outline,
+                                '질문',
+                                text,
+                                bgColor,
+                              ));
+                            }
+                            // Skip the original reason part
+                            continue;
+                          } else if (part.startsWith('Question:') || part.startsWith('질문:')) {
+                            // Question section
+                            final text = part.startsWith('Question:')
+                                ? part.substring('Question:'.length).trim()
+                                : part.substring('질문:'.length).trim();
+                            contentWidgets.add(_buildIconSection(
+                              Icons.help_outline,
+                              '질문',
+                              text,
+                              bgColor,
+                            ));
+                          } else if (part.startsWith('Thought:') || part.startsWith('추론:')) {
+                            // Thought section
+                            final text = part.startsWith('Thought:')
+                                ? part.substring('Thought:'.length).trim()
+                                : part.substring('추론:'.length).trim();
+                            contentWidgets.add(_buildIconSection(
+                              Icons.lightbulb_outline,
+                              '추론',
+                              text,
+                              bgColor,
+                            ));
+                          } else if (part.startsWith('Action:')) {
+                            contentWidgets.add(
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8, bottom: 4),
+                                child: Text('Action:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                              ),
+                            );
+                          } else {
+                            contentWidgets.add(
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Text(part, style: TextStyle(color: Colors.white70, fontSize: 14)),
+                              ),
+                            );
+                          }
+                        }
                         return Align(
                           alignment: Alignment.centerLeft,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Text(
-                              msg.text,
-                              style: TextStyle(color: Colors.white70, fontSize: 14),
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: bgColor.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Icon and display label horizontally
+                                Row(
+                                  children: [
+                                    Icon(leadingIcon, color: bgColor, size: iconSize),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      displayTag,
+                                      style: TextStyle(
+                                        fontSize: labelSize,
+                                        fontWeight: FontWeight.bold,
+                                        color: bgColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                // Descriptive text
+                                Text(
+                                  descText,
+                                  style: TextStyle(
+                                    fontSize: labelSize,
+                                    color: bgColor.withOpacity(0.9),
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                ...contentWidgets,
+                              ],
                             ),
                           ),
                         );
@@ -772,6 +1016,39 @@ class _AssistantPageState extends State<AssistantPage> {
                       ),
                     ),
                   ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIconSection(IconData icon, String label, String content, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  content,
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
               ],
             ),
