@@ -1131,7 +1131,6 @@ class _HomePageState extends State<HomePage> {
                 alignment: WrapAlignment.start,
                 children: [
                   ...displayFavorites.map((f) => _buildFavoriteIcon(f, isDeparture: f.isDeparture)),
-                  _buildEmptyFavoriteIcon(isDeparture: false),
                 ],
               ),
         ],
