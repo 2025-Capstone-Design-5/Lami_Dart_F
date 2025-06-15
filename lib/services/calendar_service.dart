@@ -28,6 +28,17 @@ class CalendarService {
     }
   }
 
+  /// Try to sign in silently (without prompt)
+  static Future<bool> signInSilently() async {
+    try {
+      final account = await _googleSignIn.signInSilently();
+      return account != null;
+    } catch (error) {
+      print('Error signing in silently: $error');
+      return false;
+    }
+  }
+
   /// Sign out
   static Future<void> signOut() async {
     await _googleSignIn.signOut();

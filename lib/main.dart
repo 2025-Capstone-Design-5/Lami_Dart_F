@@ -9,6 +9,7 @@ import 'pages/auth/splash_screen.dart'; // 스플래시 화면 import 추가
 import 'dart:io';
 import 'package:provider/provider.dart';
 import 'providers/auth_state.dart';
+import 'services/notification_service.dart';
 
 /// 앱 시작 전에 환경변수를 로드합니다
 Future<void> main() async {
@@ -21,6 +22,8 @@ Future<void> main() async {
     debugPrint("[dotenv] failed to load .env: $e");
   }
   await initializeDateFormatting('ko');
+  // 로컬 알림 서비스 초기화
+  await NotificationService.init();
   runApp(
     ChangeNotifierProvider(
       create: (_) => AuthState(),

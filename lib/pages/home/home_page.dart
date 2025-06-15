@@ -23,6 +23,7 @@ import '../assistant/assistant_page.dart';
 import '../../services/calendar_service.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 import '../../config/server_config.dart'; // getServerBaseUrl import 추가
+import '../../services/notification_service.dart';
 
 
 class HomePage extends StatefulWidget {
@@ -38,7 +39,7 @@ class _HomePageState extends State<HomePage> {
   // 이벤트 서비스 인스턴스
   final EventService _eventService = EventService();
   final FavoriteService _favoriteService = FavoriteService();
-  late final AlarmApiService _alarmApiService;
+  late AlarmApiService _alarmApiService;
   String? _googleId;
   // DB에서 가져온 알람 도착시간 및 알람시간
   DateTime? _dbArrivalTime;
@@ -64,6 +65,8 @@ class _HomePageState extends State<HomePage> {
   String _currentAlarmType = ''; // 현재 울리는 알람 타입 ('schedule' 또는 'countdown')
   // Currently scheduled alarm ID on server
   String? _currentAlarmId;
+  // Currently scheduled local notification ID
+  int? _notificationId;
 
   // 알람 등록 시 홈 알람 위젯 갱신 콜백
   VoidCallback? globalAlarmRefreshCallback;
@@ -243,6 +246,14 @@ class _HomePageState extends State<HomePage> {
         );
         
         print('✅ 홈 알람 - Google Calendar 일정 추가 성공!');
+        // 로컬 알림 스케줄링
+        _notificationId = startDt.millisecondsSinceEpoch ~/ 1000;
+        await NotificationService.scheduleNotification(
+          id: _notificationId!,
+          title: '⏰ 알람: $arrivalTimeStr 도착 준비',
+          body: '준비시간: ${preparationTime.inMinutes}분\n도착 예정: $arrivalTimeStr',
+          scheduledDate: startDt,
+        );
       } catch (e) {
         print('❌ 홈 알람 - 캘린더 추가 실패: $e');
         // 캘린더 추가 실패해도 알람은 정상 동작하도록
@@ -284,6 +295,11 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       isAlarmScheduleActive = false;
     });
+    // 로컬 알림 취소
+    if (_notificationId != null) {
+      await NotificationService.cancelNotification(_notificationId!);
+      _notificationId = null;
+    }
     // Delete from server
     if (_currentAlarmId != null) {
       try {

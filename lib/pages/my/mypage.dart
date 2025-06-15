@@ -3,7 +3,8 @@ import 'favorite_places_page.dart';
 import 'update_page.dart';
 import 'settings_page.dart';
 import '../auth/login_screen.dart';
-import '../../services/calendar_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/notification_service.dart';
 
 // StatelessWidget에서 StatefulWidget으로 변경
 class MyPage extends StatefulWidget {
@@ -105,26 +106,20 @@ class _MyPageState extends State<MyPage> {
               },
             ),
             const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  if (!CalendarService.isSignedIn()) {
-                    await CalendarService.signIn();
-                  }
-                  final events = await CalendarService.fetchEvents(
-                    timeMin: DateTime.now(),
-                    maxResults: 5,
-                  );
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('가져온 이벤트 ${events.length}개')),
-                  );
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('캘린더 테스트 실패: $e')),
-                  );
-                }
+            ListTile(
+              leading: Icon(Icons.delete_sweep, color: Colors.red),
+              title: Text('캐시 지우기'),
+              onTap: () {
+                _clearCache();
               },
-              child: const Text('캘린더 API 테스트'),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: Icon(Icons.notifications_active, color: Colors.blue),
+              title: Text('푸시 알림 테스트'),
+              onTap: () {
+                _testNotification();
+              },
             ),
           ],
         ),
@@ -165,6 +160,30 @@ class _MyPageState extends State<MyPage> {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const LoginScreen()),
       (route) => false,
+    );
+  }
+
+  // 캐시 정리 함수
+  Future<void> _clearCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('캐시가 삭제되었습니다')),
+    );
+  }
+
+  // 푸시 알림 테스트 함수
+  Future<void> _testNotification() async {
+    final id = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final scheduledDate = DateTime.now().add(const Duration(seconds: 5));
+    await NotificationService.scheduleNotification(
+      id: id,
+      title: '테스트 알림',
+      body: '푸시 알림이 작동합니다!',
+      scheduledDate: scheduledDate,
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('5초 후에 알림이 도착합니다!')),
     );
   }
 }

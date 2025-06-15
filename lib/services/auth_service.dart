@@ -7,6 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../config/server_config.dart';
+import 'calendar_service.dart';
 
 /// Service for handling authentication flows (Google OAuth & guest) via backend.
 class AuthResult {
@@ -98,6 +99,8 @@ class AuthService {
     final email = payload['email'] as String;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('googleId', payload['sub'] as String);
+    // Ensure GoogleSignIn is initialized for calendar service
+    await CalendarService.signInSilently();
     return AuthResult(name: name, email: email);
   }
 

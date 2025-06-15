@@ -534,6 +534,17 @@ class _RouteResultsPageState extends State<RouteResultsPage> {
                               ),
 
                               const SizedBox(height: 8),
+                              // (4) 실시간 도착 정보 표시
+                              Text(
+                                option.realtimeArrivalTimes.isNotEmpty
+                                    ? '실시간 도착 정보: ${option.realtimeArrivalTimes.first}'
+                                    : '실시간 도착 정보 없음',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
                               // "선택" 버튼은 제거되었습니다.
                             ],
                           ),
