@@ -61,7 +61,7 @@ class AuthService {
         'response_type': 'code',
         'client_id': clientId,
         'redirect_uri': redirectUri,
-        'scope': 'openid email profile https://www.googleapis.com/auth/calendar',
+        'scope': 'openid email profile https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events',
         'state': state,
         'code_challenge': challenge,
         'code_challenge_method': 'S256',
@@ -111,5 +111,11 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('googleId', guestId);
     return AuthResult(name: name, email: email);
+  }
+
+  /// Logs out the user by clearing local credentials.
+  Future<void> logout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('googleId');
   }
 } 

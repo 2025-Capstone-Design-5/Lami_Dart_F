@@ -3,6 +3,7 @@ import 'favorite_places_page.dart';
 import 'update_page.dart';
 import 'settings_page.dart';
 import '../auth/login_screen.dart';
+import '../../services/calendar_service.dart';
 
 // StatelessWidget에서 StatefulWidget으로 변경
 class MyPage extends StatefulWidget {
@@ -102,6 +103,28 @@ class _MyPageState extends State<MyPage> {
                 // 로그아웃 처리 및 로그인 화면으로 이동
                 _showLogoutConfirmationDialog(context);
               },
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () async {
+                try {
+                  if (!CalendarService.isSignedIn()) {
+                    await CalendarService.signIn();
+                  }
+                  final events = await CalendarService.fetchEvents(
+                    timeMin: DateTime.now(),
+                    maxResults: 5,
+                  );
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('가져온 이벤트 ${events.length}개')),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('캘린더 테스트 실패: $e')),
+                  );
+                }
+              },
+              child: const Text('캘린더 API 테스트'),
             ),
           ],
         ),

@@ -45,17 +45,6 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>com.nam9.lami</string>
-			</array>
-		</dict>
-	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>앱 디버깅 및 인증을 위해 로컬 네트워크 접근 권한이 필요합니다.</string>
 	<key>NSBonjourServices</key>
@@ -66,5 +55,16 @@
 	<string>앱 음성 인식 기능 사용을 위해 음성 인식 권한이 필요합니다.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>앱 녹음 기능 사용을 위해 마이크 접근 권한이 필요합니다.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.169978966511-vbb2ji32kqas1a4v3bev09ln5lq0da0c</string>
+			</array>
+		</dict>
+	</array>
+	<key>GIDClientID</key>
+	<string>169978966511-vbb2ji32kqas1a4v3bev09ln5lq0da0c.apps.googleusercontent.com</string>
 </dict>
 </plist>

@@ -24,6 +24,13 @@ dependencies:
   flutter_web_auth_2: ^4.1.0 # OAuth 인증 (migrated)
   crypto: ^3.0.1 # PKCE 생성
   speech_to_text: ^7.0.0 # STT (음성인식)
+  googleapis: ^14.0.0
+  # Google Calendar 인증 및 API 호출을 위한 패키지
+  google_sign_in: ^6.1.0
+  extension_google_sign_in_as_googleapis_auth: ^2.0.13
+  # State management
+  provider: ^6.1.5
+  table_calendar: ^3.0.10
 
 dev_dependencies:
   flutter_test:

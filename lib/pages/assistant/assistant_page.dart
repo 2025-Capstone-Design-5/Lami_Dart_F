@@ -22,6 +22,7 @@ import '../../widgets/favorite_list_widget.dart';
 import '../../models/favorite_route_model.dart';
 import '../../config/server_config.dart';
 import '../../services/alarm_api_service.dart';
+import '../../services/calendar_service.dart';
 
 typedef AlarmRefreshCallback = void Function();
 AlarmRefreshCallback? globalAlarmRefreshCallback;
@@ -600,26 +601,52 @@ class _AssistantPageState extends State<AssistantPage> {
                                     return;
                                   }
                                   try {
+                                    print('🔄 Assistant - 알람 설정 시작...');
                                     // 예시: 도착 예정 시간(현재 시간 + duration), 준비 시간(5분)
                                     final now = DateTime.now();
                                     final arrival = now.add(Duration(seconds: route.duration));
                                     final arrivalStr = arrival.toIso8601String();
                                     final preparationTime = 5; // 분 단위, 필요시 UI에서 입력받게 할 수 있음
+                                    
                                     final alarmService = AlarmApiService(googleId: _googleId!);
                                     await alarmService.registerAlarm(
                                       arrivalTime: arrivalStr,
                                       preparationTime: preparationTime,
                                     );
+                                    
+                                    // Google Calendar에 일정 추가
+                                    try {
+                                      if (!CalendarService.isSignedIn()) {
+                                        await CalendarService.signIn();
+                                      }
+                                      
+                                      final startDt = arrival.subtract(Duration(minutes: preparationTime));
+                                      await CalendarService.addEvent(
+                                        summary: '🤖 AI 추천 경로 알람',
+                                        start: startDt,
+                                        end: arrival,
+                                        description: 'AI가 추천한 경로 알람\n준비시간: ${preparationTime}분\n소요시간: ${route.duration ~/ 60}분',
+                                      );
+                                      print('✅ Assistant - Google Calendar 일정 추가 성공!');
+                                    } catch (e) {
+                                      print('❌ Assistant - 캘린더 추가 실패: $e');
+                                      // 캘린더 추가 실패해도 알람은 정상 동작하도록
+                                    }
+                                    
                                     // 홈 알람 위젯 갱신 트리거
                                     if (globalAlarmRefreshCallback != null) {
                                       globalAlarmRefreshCallback!();
                                     }
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('알람이 성공적으로 등록되었습니다.')),
+                                      const SnackBar(
+                                        content: Text('✅ 알람이 성공적으로 등록되었습니다!'),
+                                        backgroundColor: Colors.green,
+                                      ),
                                     );
                                   } catch (e) {
+                                    print('❌ Assistant - 알람 등록 실패: $e');
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('알람 등록 실패: $e')),
+                                      SnackBar(content: Text('❌ 알람 등록 실패: $e')),
                                     );
                                   }
                                 },

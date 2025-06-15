@@ -8,6 +8,8 @@ import 'config/server_config.dart'; // baseUrl import 필요
 class RouteStore {
   // Holds the last selected route option
   static RouteOption? selectedOption;
+  // Callback to notify when an alarm is set, so home page can refresh
+  static VoidCallback? onAlarmSet;
   // Holds the last saved route ID for fetching details on the home page
   static String? selectedRouteId;
 

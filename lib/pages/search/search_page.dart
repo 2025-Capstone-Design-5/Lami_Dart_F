@@ -5,6 +5,13 @@ import '../../search_history_service.dart';
 import '../time_setting/time_setting_page.dart';
 import '../../services/tmap_service.dart';
 import '../../favorite_service.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+import '../../config/server_config.dart';
+import '../../models/summary_response.dart';
+import '../route/route_results_page.dart';
+import '../route/route_lookup_page.dart';
 
 class SearchPage extends StatefulWidget {
   final String? initialDeparture;
@@ -391,14 +398,20 @@ class _SearchPageState extends State<SearchPage> {
             Center(
               child: ElevatedButton(
                 onPressed: () {
+                  // Navigate to lookup page with loading indicator
+                  final from = searchedDepartureAddress ?? searchedDeparture!;
+                  final to = searchedDestinationAddress ?? searchedDestination!;
+                  final now = DateTime.now();
+                  final dateStr = DateFormat('yyyy-MM-dd').format(now);
+                  final timeStr = DateFormat('HH:mm:ss').format(now);
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => TimeSettingPage(
-                        departureName: searchedDeparture,
-                        departureAddress: searchedDepartureAddress,
-                        destinationName: searchedDestination,
-                        destinationAddress: searchedDestinationAddress,
+                      builder: (_) => RouteLookupPage(
+                        from: from,
+                        to: to,
+                        date: dateStr,
+                        time: timeStr,
                       ),
                     ),
                   );

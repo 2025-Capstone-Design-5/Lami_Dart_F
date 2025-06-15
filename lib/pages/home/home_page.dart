@@ -20,6 +20,10 @@ import '../../services/alarm_api_service.dart';
 import '../../models/route_response.dart';
 import '../../models/favorite_route_model.dart';
 import '../assistant/assistant_page.dart';
+import '../../services/calendar_service.dart';
+import 'package:googleapis/calendar/v3.dart' as gcal;
+import '../../config/server_config.dart'; // getServerBaseUrl import 추가
+
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -36,6 +40,9 @@ class _HomePageState extends State<HomePage> {
   final FavoriteService _favoriteService = FavoriteService();
   late final AlarmApiService _alarmApiService;
   String? _googleId;
+  // DB에서 가져온 알람 도착시간 및 알람시간
+  DateTime? _dbArrivalTime;
+  DateTime? _dbWakeUpTime;
 
   // 준비 시간 관련 변수
   Duration preparationTime = const Duration(minutes: 30); // 기본값 30분
@@ -55,9 +62,14 @@ class _HomePageState extends State<HomePage> {
   Timer? _alarmTimer;
   Timer? _vibrationTimer;
   String _currentAlarmType = ''; // 현재 울리는 알람 타입 ('schedule' 또는 'countdown')
+  // Currently scheduled alarm ID on server
+  String? _currentAlarmId;
 
   // 알람 등록 시 홈 알람 위젯 갱신 콜백
   VoidCallback? globalAlarmRefreshCallback;
+
+  // 오늘 Google Calendar 이벤트 리스트
+  List<gcal.Event> _todayGoogleEvents = [];
 
   @override
   void initState() {
@@ -69,12 +81,18 @@ class _HomePageState extends State<HomePage> {
     _eventService.addListener(_refreshState);
     _favoriteService.loadData();
     _favoriteService.addListener(_refreshState);
-    _initAlarmApiService();
+    _initAlarmApiService().then((_) => _loadTodayGoogleEvents());
 
-    // 알람 등록 시 홈 알람 위젯 갱신 콜백 등록
-    globalAlarmRefreshCallback = () async {
-      // 서버 알람 재조회 및 상태 갱신
-      await _loadAlarms();
+    // Register callback for route alarm set
+    RouteStore.onAlarmSet = () {
+      // Immediately mark alarm as scheduled in UI
+      setState(() {
+        isAlarmScheduleActive = true;
+      });
+      // Then refresh alarms from server if needed
+      _loadAlarms();
+      // 리로드 오늘 Google Calendar 일정
+      _loadTodayGoogleEvents();
     };
   }
 
@@ -92,33 +110,53 @@ class _HomePageState extends State<HomePage> {
     if (_googleId == null || _googleId!.isEmpty) return;
     try {
       final alarms = await _alarmApiService.getAlarms();
-      if (alarms.isNotEmpty) {
-        // 가장 빠른 알람을 선택
-        alarms.sort((a, b) => DateTime.parse(a['wakeUpTime']).compareTo(DateTime.parse(b['wakeUpTime'])));
-        final alarm = alarms.first;
-        final arrivalTime = DateTime.parse(alarm['arrivalTime']);
-        final prepMinutes = alarm['preparationTime'] as int;
-        setState(() {
-          // 도착 시간 설정
-          final hour24 = arrivalTime.hour;
-          arrivalPeriod = hour24 >= 12 ? '오후' : '오전';
-          arrivalHour = hour24 % 12 == 0 ? 12 : hour24 % 12;
-          arrivalMinute = arrivalTime.minute;
-          // 준비 시간 및 남은 시간
-          preparationTime = Duration(minutes: prepMinutes);
-          remainingTime = preparationTime;
-          isAlarmScheduleActive = true;
-        });
-        // 타이머 실행(내부 로직 재사용)
-        alarmCheckTimer?.cancel();
+      if (alarms.isEmpty) return;
+      // Clear any previous ID
+      _currentAlarmId = null;
+      final now = DateTime.now();
+      // Upcoming alarms
+      final upcoming = alarms.where((a) => DateTime.parse(a['wakeUpTime']).toLocal().isAfter(now)).toList();
+      // Select candidates: first upcoming with savedRouteId, or upcoming, or any savedRoute, or any alarm
+      List<Map<String, dynamic>> candidates = [];
+      candidates.addAll(upcoming.where((a) => a['savedRouteId'] != null));
+      if (candidates.isEmpty && upcoming.isNotEmpty) {
+        candidates = upcoming;
+      }
+      if (candidates.isEmpty) {
+        final savedOnly = alarms.where((a) => a['savedRouteId'] != null).toList();
+        candidates = savedOnly.isNotEmpty ? savedOnly : alarms;
+      }
+      // Sort by wakeUpTime ascending
+      candidates.sort((a, b) => DateTime.parse(a['wakeUpTime']).compareTo(DateTime.parse(b['wakeUpTime'])));
+      final alarm = candidates.first;
+      // DB에서 가져온 arrivalTime, wakeUpTime 설정
+      final arrivalTime = DateTime.parse(alarm['arrivalTime']).toLocal();
+      final wakeUpTime = DateTime.parse(alarm['wakeUpTime']).toLocal();
+      _dbArrivalTime = arrivalTime;
+      _dbWakeUpTime = wakeUpTime;
+      // 저장된 경로 ID를 전역 상태에 설정
+      RouteStore.selectedRouteId = alarm['savedRouteId'] as String?;
+      // Store alarm ID for cancellation
+      _currentAlarmId = alarm['id'] as String?;
+      final prepMinutes = alarm['preparationTime'] as int;
+      setState(() {
+        // 준비 시간 및 남은 시간
+        preparationTime = Duration(minutes: prepMinutes);
+        remainingTime = preparationTime;
+        isAlarmScheduleActive = wakeUpTime.isAfter(now);
+      });
+      // Schedule alarm check only if wake-up is in the future
+      alarmCheckTimer?.cancel();
+      if (wakeUpTime.isAfter(now)) {
         alarmCheckTimer = Timer.periodic(
           const Duration(seconds: 1),
           (timer) {
-            final now = DateTime.now();
-            final wakeUpTime = DateTime.parse(alarm['wakeUpTime']);
-            if (now.isAfter(wakeUpTime) || now.isAtSameMomentAs(wakeUpTime)) {
+            final current = DateTime.now();
+            if (current.isAfter(wakeUpTime) || current.isAtSameMomentAs(wakeUpTime)) {
               timer.cancel();
-              setState(() { isAlarmScheduleActive = false; });
+              setState(() {
+                isAlarmScheduleActive = false;
+              });
               _startAlarm('schedule');
             }
           },
@@ -142,8 +180,8 @@ class _HomePageState extends State<HomePage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 의존성이 변경될 때마다 상태를 갱신
-    setState(() {});
+    // 로그인 상태 변경 시 알람 API 서비스 및 알람 데이터 초기화
+    _initAlarmApiService();
   }
 
   // 상태 갱신 함수
@@ -162,8 +200,8 @@ class _HomePageState extends State<HomePage> {
     alarmCheckTimer?.cancel();
     _stopAlarm();
     _audioPlayer?.dispose();
-    // 콜백 해제
-    globalAlarmRefreshCallback = null;
+    // Route alarm callback 해제
+    RouteStore.onAlarmSet = null;
     super.dispose();
   }
 
@@ -182,10 +220,33 @@ class _HomePageState extends State<HomePage> {
       else if (arrivalPeriod == '오전' && arrivalHour == 12) hour24 = 0;
       var arrivalDateTime = DateTime(now.year, now.month, now.day, hour24, arrivalMinute);
       if (arrivalDateTime.isBefore(now)) arrivalDateTime = arrivalDateTime.add(const Duration(days: 1));
+      
       await _alarmApiService.registerAlarm(
         arrivalTime: arrivalDateTime.toIso8601String(),
         preparationTime: preparationTime.inMinutes,
       );
+      
+      // Google Calendar에 일정 추가
+      try {
+        if (!CalendarService.isSignedIn()) {
+          await CalendarService.signIn();
+        }
+        
+        final startDt = arrivalDateTime.subtract(preparationTime);
+        final arrivalTimeStr = '${arrivalPeriod} ${arrivalHour}:${arrivalMinute.toString().padLeft(2, '0')}';
+        
+        await CalendarService.addEvent(
+          summary: '⏰ 알람: ${arrivalTimeStr} 도착 준비',
+          start: startDt,
+          end: arrivalDateTime,
+          description: '준비시간: ${preparationTime.inMinutes}분\n도착 예정: $arrivalTimeStr',
+        );
+        
+        print('✅ 홈 알람 - Google Calendar 일정 추가 성공!');
+      } catch (e) {
+        print('❌ 홈 알람 - 캘린더 추가 실패: $e');
+        // 캘린더 추가 실패해도 알람은 정상 동작하도록
+      }
     } catch (e) {
       print('알람 서버 등록 실패: $e');
     }
@@ -217,11 +278,36 @@ class _HomePageState extends State<HomePage> {
   }
 
   // 알람예정시간 스케줄 중지
-  void _stopAlarmSchedule() {
+  Future<void> _stopAlarmSchedule() async {
+    // Cancel local timer & UI state
+    alarmCheckTimer?.cancel();
     setState(() {
-      alarmCheckTimer?.cancel();
       isAlarmScheduleActive = false;
     });
+    // Delete from server
+    if (_currentAlarmId != null) {
+      try {
+        await _alarmApiService.deleteAlarm(id: _currentAlarmId!);
+        // 저장된 경로 삭제
+        final routeId = RouteStore.selectedRouteId;
+        if (routeId != null) {
+          final resp = await http.delete(
+            Uri.parse('${getServerBaseUrl()}/traffic/routes/save/$routeId'),
+            headers: {'Content-Type': 'application/json'},
+          );
+          if (resp.statusCode >= 200 && resp.statusCode < 300) {
+            RouteStore.selectedRouteId = null;
+          }
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('알람 취소 실패: $e')),
+        );
+      }
+      _currentAlarmId = null;
+      // 알람 취소 후 최신 알람 정보 로드
+      await _loadAlarms();
+    }
   }
 
   // 알람예정시간 DateTime 계산
@@ -515,27 +601,34 @@ class _HomePageState extends State<HomePage> {
 
   // 도착시간 표시 문자열 반환
   String _getArrivalTimeString() {
-    String hourStr = arrivalHour.toString().padLeft(2, '0');
-    String minuteStr = arrivalMinute.toString().padLeft(2, '0');
-    return "$arrivalPeriod $hourStr:$minuteStr";
+    if (_dbArrivalTime != null) {
+      final dt = _dbArrivalTime!;
+      final hour = dt.hour;
+      final minute = dt.minute;
+      final period = hour >= 12 ? '오후' : '오전';
+      final displayHour = hour % 12 == 0 ? 12 : hour % 12;
+      final hourStr = displayHour.toString().padLeft(2, '0');
+      final minuteStr = minute.toString().padLeft(2, '0');
+      return '$period $hourStr:$minuteStr';
+    }
+    // DB 데이터 없으면 빈 문자열 반환
+    return '';
   }
 
   // 알람예정시간 계산 및 표시 문자열 반환
   String _getAlarmTimeString() {
-    DateTime alarmTime = _getAlarmDateTime();
-
-    String period = alarmTime.hour < 12 ? '오전' : '오후';
-    int displayHour = alarmTime.hour;
-    if (displayHour == 0) {
-      displayHour = 12;
-    } else if (displayHour > 12) {
-      displayHour -= 12;
+    if (_dbWakeUpTime != null) {
+      final dt = _dbWakeUpTime!;
+      final hour = dt.hour;
+      final minute = dt.minute;
+      final period = hour < 12 ? '오전' : '오후';
+      final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
+      final hourStr = displayHour.toString().padLeft(2, '0');
+      final minuteStr = minute.toString().padLeft(2, '0');
+      return '$period $hourStr:$minuteStr';
     }
-
-    String hourStr = displayHour.toString().padLeft(2, '0');
-    String minuteStr = alarmTime.minute.toString().padLeft(2, '0');
-
-    return "$period $hourStr:$minuteStr";
+    // DB 데이터 없으면 빈 문자열 반환
+    return '';
   }
 
   void _goToShortestRoutePage() {
@@ -592,8 +685,8 @@ class _HomePageState extends State<HomePage> {
     final today = DateTime.now();
     final formattedDate = '${today.month}/${today.day} ${_getWeekdayString(today.weekday)}요일';
 
-    // 오늘의 일정 가져오기
-    final todayEvents = _eventService.getEvents(today);
+    // 오늘의 Google Calendar 일정 가져오기
+    final todayEvents = _todayGoogleEvents;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3EFEE),
@@ -643,7 +736,7 @@ class _HomePageState extends State<HomePage> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: isAlarmScheduleActive ? Colors.orange.withOpacity(0.1) : Colors.white,
                       borderRadius: BorderRadius.circular(18),
                       boxShadow: [
                         BoxShadow(
@@ -652,10 +745,10 @@ class _HomePageState extends State<HomePage> {
                           offset: Offset(0, 1),
                         ),
                       ],
-                      // 알람이 울릴 때 테두리 색상 변경
+                      // 알람 울림/예정 상태에 따른 테두리 색상
                       border: _isAlarmRinging
                           ? Border.all(color: Colors.red, width: 2)
-                          : null,
+                          : (isAlarmScheduleActive ? Border.all(color: Colors.orange, width: 2) : null),
                     ),
                     child: Column(
                       children: [
@@ -675,6 +768,14 @@ class _HomePageState extends State<HomePage> {
                               Icon(
                                 Icons.alarm,
                                 color: Colors.red,
+                                size: 20,
+                              ),
+                            ],
+                            if (!_isAlarmRinging && isAlarmScheduleActive) ...[
+                              const SizedBox(width: 8),
+                              Icon(
+                                Icons.alarm,
+                                color: Colors.orange,
                                 size: 20,
                               ),
                             ],
@@ -762,27 +863,8 @@ class _HomePageState extends State<HomePage> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        // 버튼 영역 - 상태에 따라 다른 버튼 표시
-                        if (!isAlarmScheduleActive && !isCountdownActive)
-                          ElevatedButton(
-                            onPressed: _startAlarmSchedule,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
-                              foregroundColor: Colors.white,
-                              minimumSize: Size(160, 36),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                            ),
-                            child: const Text(
-                              '알람 시작',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          )
-                        else if (isAlarmScheduleActive)
+                        // 버튼 영역 - 알람 설정 후 바로 활성화된 상태 표시 (시작 버튼 제거)
+                        if (isAlarmScheduleActive)
                           Column(
                             children: [
                               Row(
@@ -995,9 +1077,12 @@ class _HomePageState extends State<HomePage> {
                           ListView.builder(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
-                            itemCount: todayEvents.length > 3 ? 3 : todayEvents.length, // 최대 3개만 표시
+                            itemCount: todayEvents.length > 3 ? 3 : todayEvents.length,
                             itemBuilder: (context, index) {
-                              final event = todayEvents[index]; // 이벤트 객체를 미리 가져오기
+                              final evt = todayEvents[index];
+                              final title = evt.summary ?? '제목 없음';
+                              final dt = evt.start?.dateTime?.toLocal();
+                              final timeStr = dt != null ? DateFormat('HH:mm').format(dt) : '';
                               return Padding(
                                 padding: const EdgeInsets.symmetric(vertical: 4.0),
                                 child: Container(
@@ -1009,15 +1094,11 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                   child: Row(
                                     children: [
-                                      Icon(
-                                        Icons.event,
-                                        color: Colors.blue,
-                                        size: 16,
-                                      ),
+                                      Icon(Icons.event, color: Colors.blue, size: 16),
                                       const SizedBox(width: 8),
                                       Expanded(
                                         child: Text(
-                                          event.title ?? event.content ?? '제목 없음', // title이 있으면 title, 없으면 content 사용
+                                          title,
                                           style: const TextStyle(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w500,
@@ -1026,14 +1107,8 @@ class _HomePageState extends State<HomePage> {
                                           overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
-                                      if (event.time != null && event.time!.isNotEmpty) // time 속성 사용
-                                        Text(
-                                          event.time!,
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.black54,
-                                          ),
-                                        ),
+                                      if (timeStr.isNotEmpty)
+                                        Text(timeStr, style: const TextStyle(fontSize: 12, color: Colors.black54)),
                                     ],
                                   ),
                                 ),
@@ -1373,5 +1448,27 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     );
+  }
+
+  // 오늘 Google Calendar 이벤트 로드
+  Future<void> _loadTodayGoogleEvents() async {
+    try {
+      if (!CalendarService.isSignedIn()) {
+        await CalendarService.signIn();
+      }
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      final endOfDay = startOfDay.add(const Duration(days: 1));
+      final events = await CalendarService.fetchEvents(
+        timeMin: startOfDay,
+        timeMax: endOfDay,
+        maxResults: 10,
+      );
+      setState(() {
+        _todayGoogleEvents = events;
+      });
+    } catch (e) {
+      print('오늘 구글 캘린더 이벤트 로드 실패: $e');
+    }
   }
 }

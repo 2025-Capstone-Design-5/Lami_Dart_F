@@ -9,6 +9,7 @@ import '../../models/route_response.dart';
 import '../../models/summary_response.dart';
 import '../route/route_results_page.dart'; // 경로 결과 페이지 import 추가
 import '../../config/server_config.dart';
+import '../../services/alarm_api_service.dart';
 
 class TimeSettingPage extends StatefulWidget {
   final Function(Duration)? onPrepTimeSet;
@@ -180,32 +181,62 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
   }
 
   // 캘린더에 알람 일정 저장
-  void _saveAlarmToCalendar() {
+  Future<void> _saveAlarmToCalendar() async {
     if (alarmTime == null) return;
 
     // 도착 시간 포맷팅
-    final arrivalTimeString = DateFormat('HH:mm').format(DateTime(
+    final arrivalDateTime = DateTime(
       arrivalDate.year,
       arrivalDate.month,
       arrivalDate.day,
       _convertTo24Hour(arrivalPeriod, arrivalHour),
       arrivalMinute,
-    ));
-
-    // EventService를 통해 알람 일정 추가
-    _eventService.addAlarmEvent(alarmTime!, arrivalDate, arrivalTimeString);
-
-    print('알람 일정이 캘린더에 저장되었습니다:');
-    print('알람 시간: ${DateFormat('yyyy-MM-dd HH:mm').format(alarmTime!)}');
-    print('도착 시간: ${DateFormat('yyyy-MM-dd').format(arrivalDate)} $arrivalTimeString');
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('알람이 캘린더에 저장되었습니다.'),
-          backgroundColor: Colors.green,
-        ),
+    );
+    
+    final arrivalTimeString = DateFormat('HH:mm').format(arrivalDateTime);
+    final prepTime = _calculatePrepTime();
+    
+    try {
+      // 1. 서버 DB에 알람 저장
+      final prefs = await SharedPreferences.getInstance();
+      final googleId = prefs.getString('googleId') ?? '';
+      
+      if (googleId.isEmpty) {
+        throw Exception('사용자 정보를 찾을 수 없습니다.');
+      }
+      
+      // AlarmApiService를 사용하여 서버에 알람 등록
+      final alarmService = AlarmApiService(googleId: googleId);
+      await alarmService.registerAlarm(
+        arrivalTime: arrivalDateTime.toIso8601String(),
+        preparationTime: prepTime.inMinutes,
       );
+      
+      // 2. EventService를 통해 알람 일정 추가 (로컬 캘린더)
+      _eventService.addAlarmEvent(alarmTime!, arrivalDate, arrivalTimeString);
+      
+      print('알람 일정이 서버와 캘린더에 저장되었습니다:');
+      print('알람 시간: ${DateFormat('yyyy-MM-dd HH:mm').format(alarmTime!)}');
+      print('도착 시간: ${DateFormat('yyyy-MM-dd').format(arrivalDate)} $arrivalTimeString');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('알람이 서버와 캘린더에 저장되었습니다.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('알람 저장 실패: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('알람 저장 실패: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -304,6 +335,22 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
           fontSize: 20,
         ),
         iconTheme: const IconThemeData(color: Color(0xFF334066)),
+        actions: [
+          // 알람 저장 버튼
+          IconButton(
+            icon: const Icon(Icons.alarm_add),
+            onPressed: () async {
+              // 유효성 검사
+              if (!_validateSettings()) {
+                return;
+              }
+              
+              // 알람 저장
+              await _saveAlarmToCalendar();
+            },
+            tooltip: '알람 저장',
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Padding(

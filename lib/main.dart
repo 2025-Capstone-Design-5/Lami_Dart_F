@@ -7,6 +7,8 @@ import 'pages/assistant/assistant_page.dart';
 import 'pages/my/mypage.dart';
 import 'pages/auth/splash_screen.dart'; // 스플래시 화면 import 추가
 import 'dart:io';
+import 'package:provider/provider.dart';
+import 'providers/auth_state.dart';
 
 /// 앱 시작 전에 환경변수를 로드합니다
 Future<void> main() async {
@@ -19,7 +21,12 @@ Future<void> main() async {
     debugPrint("[dotenv] failed to load .env: $e");
   }
   await initializeDateFormatting('ko');
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => AuthState(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -27,15 +34,19 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: '메인화면',
-      theme: ThemeData(
-        fontFamily: 'Inter',
-        scaffoldBackgroundColor: const Color(0xFFF3EFEE),
-      ),
-      home: const SplashScreen(), // 시작점을 스플래시 화면으로 변경
-      debugShowCheckedModeBanner: false,
-      routes: {},
+    return Consumer<AuthState>(
+      builder: (context, authState, _) {
+        return MaterialApp(
+          title: '메인화면',
+          theme: ThemeData(
+            fontFamily: 'Inter',
+            scaffoldBackgroundColor: const Color(0xFFF3EFEE),
+          ),
+          home: authState.loggedIn ? const SplashScreen() : const SplashScreen(),
+          debugShowCheckedModeBanner: false,
+          routes: {},
+        );
+      },
     );
   }
 }

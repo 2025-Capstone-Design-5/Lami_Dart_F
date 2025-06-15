@@ -10,6 +10,7 @@ import 'package:untitled4/route_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:untitled4/config/server_config.dart';
 import 'package:untitled4/pages/assistant/assistant_page.dart';
+import '../../services/calendar_service.dart';
 
 /// RouteResultsPage: SummaryData를 받아 여러 경로 옵션을 탭별로 보여주는 페이지
 class RouteResultsPage extends StatefulWidget {
@@ -36,6 +37,21 @@ class _RouteResultsPageState extends State<RouteResultsPage> {
       widget.summaryData.routes.where((r) => r.category == 'subway').toList(),
       widget.summaryData.routes.where((r) => r.category == 'bus_subway').toList(),
     ];
+    
+    // Debug logging for filtered routes
+    print('===== FILTERED ROUTES DEBUG =====');
+    for (int i = 0; i < tabs.length; i++) {
+      print('${tabs[i]} (${lists[i].length} routes)');
+    }
+    
+    // Check if any routes might be missing due to category mismatch
+    final allCategories = widget.summaryData.routes.map((r) => r.category).toSet();
+    final expectedCategories = {'walk', 'car', 'bus', 'subway', 'bus_subway'};
+    final unexpectedCategories = allCategories.difference(expectedCategories);
+    if (unexpectedCategories.isNotEmpty) {
+      print('WARNING: Found unexpected categories: $unexpectedCategories');
+    }
+    print('================================');
 
     return DefaultTabController(
       length: tabs.length,
@@ -195,8 +211,8 @@ class _RouteResultsPageState extends State<RouteResultsPage> {
                                         IconButton(
                                           icon: const Icon(Icons.alarm, color: Colors.deepOrange),
                                           tooltip: '이 경로로 알림 설정',
-                                          onPressed: () async {
-                                            await _handleAlarmAction(option, widget.summaryData, index);
+                                          onPressed: () {
+                                            _showAlarmDialog(option, widget.summaryData, index);
                                           },
                                         ),
                                       ],
@@ -537,7 +553,7 @@ class _RouteResultsPageState extends State<RouteResultsPage> {
   // 즐겨찾기 액션 처리
   Future<void> _handleFavoriteAction(RouteSummary option, SummaryData summaryData, int index) async {
     final String baseUrl = getServerBaseUrl();
-    final detailUrl = Uri.parse('$baseUrl/traffic/routes/detail');
+    final detailUrl = Uri.parse('${getServerBaseUrl()}/traffic/routes/detail');
     
     // 먼저 상세 정보 조회
     final requestPayload = {
@@ -573,7 +589,7 @@ class _RouteResultsPageState extends State<RouteResultsPage> {
       
       try {
         final resp = await http.post(
-          Uri.parse('$baseUrl/traffic/routes/quick-action'),
+          Uri.parse('${getServerBaseUrl()}/traffic/routes/quick-action'),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode(quickActionPayload),
         );
@@ -599,64 +615,186 @@ class _RouteResultsPageState extends State<RouteResultsPage> {
     }
   }
 
-  // 알람 액션 처리
-  Future<void> _handleAlarmAction(RouteSummary option, SummaryData summaryData, int index) async {
-    final String baseUrl = getServerBaseUrl();
-    final detailUrl = Uri.parse('$baseUrl/traffic/routes/detail');
-    final requestPayload = {
-      'summaryKey': summaryData.summaryKey,
-      'category': option.category,
-      'index': index,
-    };
-    final detailResp = await http.post(
-      detailUrl,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(requestPayload),
-    );
-    if (detailResp.statusCode >= 200 && detailResp.statusCode < 300) {
-      final detailData = RouteDetailResponse.parse(detailResp.body).data;
+  // 알람 액션 처리 및 경로 저장
+  Future<void> _handleAlarmAction(RouteSummary option, SummaryData summaryData, int index, String arrivalTime, int preparationTime) async {
+    try {
+      // 1. 사용자 정보 로드
       final prefs = await SharedPreferences.getInstance();
       final googleId = prefs.getString('googleId') ?? '';
-      const action = 'alarm';
-      final quickActionPayload = {
+      if (googleId.isEmpty) {
+        throw Exception('사용자 정보를 찾을 수 없습니다.');
+      }
+
+      // 2. 경로 상세 조회
+      final detailUrl = Uri.parse('${getServerBaseUrl()}/traffic/routes/detail');
+      final detailPayload = {
+        'summaryKey': summaryData.summaryKey,
+        'category': option.category,
+        'index': index,
+      };
+      final detailResp = await http.post(
+        detailUrl,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(detailPayload),
+      );
+      if (detailResp.statusCode < 200 || detailResp.statusCode >= 300) {
+        throw Exception('경로 상세 조회 실패: ${detailResp.statusCode}');
+      }
+      final detailData = RouteDetailResponse.parse(detailResp.body).data;
+
+      // 3. 경로 저장 및 알람 등록
+      final saveUrl = Uri.parse('${getServerBaseUrl()}/traffic/routes/save');
+      final savePayload = {
         'googleId': googleId,
         'origin': summaryData.origin,
         'destination': summaryData.destination,
-        'arrivalTime': DateTime.now().toIso8601String(),
-        'category': option.category,
+        'arrivalTime': arrivalTime,
+        'preparationTime': preparationTime,
         'summary': option.toJson(),
         'detail': detailData.toJson(),
-        'action': action,
+        'category': option.category,
       };
-      try {
-        final resp = await http.post(
-          Uri.parse('$baseUrl/traffic/routes/quick-action'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode(quickActionPayload),
-        );
-        if (resp.statusCode >= 200 && resp.statusCode < 300) {
-          final respJson = json.decode(resp.body) as Map<String, dynamic>;
-          final savedRouteId = respJson['savedRouteId'] as String?;
-          // 저장된 routeId를 보관
-          RouteStore.selectedRouteId = savedRouteId;
-          final message = respJson['message'] as String? ?? '알람이 설정되었습니다.';
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-          // 홈 화면으로 돌아가기
-          Navigator.of(context).popUntil((route) => route.isFirst);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('알람 처리 실패: ${resp.statusCode}')),
-          );
-        }
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('서버 통신 오류')),
-        );
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('상세 경로 조회 실패: ${detailResp.statusCode}')),
+      final saveResp = await http.post(
+        saveUrl,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(savePayload),
       );
+      if (saveResp.statusCode < 200 || saveResp.statusCode >= 300) {
+        throw Exception('경로 저장 및 알람 등록 실패: ${saveResp.body}');
+      }
+
+      // 서버 응답에서 savedRouteId를 추출하여 전역 상태에 저장
+      final saveBody = jsonDecode(saveResp.body) as Map<String, dynamic>;
+      final savedRouteId = saveBody['id'] as String?;
+      if (savedRouteId != null) {
+        RouteStore.selectedRouteId = savedRouteId;
+      }
+
+      // 4. Google Calendar에 일정 추가
+      if (!CalendarService.isSignedIn()) {
+        await CalendarService.signIn();
+      }
+      final arrivalDt = DateTime.parse(arrivalTime);
+      final startDt = arrivalDt.subtract(Duration(minutes: preparationTime));
+      await CalendarService.addEvent(
+        summary: '🚗 경로 알람: ${summaryData.origin} → ${summaryData.destination}',
+        start: startDt,
+        end: arrivalDt,
+        description: '준비시간: ${preparationTime}분\n경로: ${option.routeShortNames.join(" → ")}',
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('경로 저장 및 알람이 등록되었습니다.')),
+      );
+      RouteStore.onAlarmSet?.call();
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('알람 설정 실패: $e')),
+      );
+    }
+  }
+
+  // 알람 설정 모달 다이얼로그 표시
+  Future<void> _showAlarmDialog(RouteSummary option, SummaryData summaryData, int index) async {
+    // 초기값: 오늘 날짜, 현재 시간, 준비 시간 0분
+    DateTime selectedDate = DateTime.now();
+    TimeOfDay selectedTime = TimeOfDay.now();
+    int prepMinutes = 0;
+    final dateController = TextEditingController(text: DateFormat('yyyy-MM-dd').format(selectedDate));
+    final timeController = TextEditingController(text: selectedTime.format(context));
+    final prepController = TextEditingController(text: '0');
+    try {
+      await showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('알람 설정'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 날짜 선택
+                TextField(
+                  controller: dateController,
+                  readOnly: true,
+                  decoration: const InputDecoration(labelText: '날짜'),
+                  onTap: () async {
+                    final pickedDate = await showDatePicker(
+                      context: context,
+                      initialDate: selectedDate,
+                      firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (pickedDate != null) {
+                      selectedDate = pickedDate;
+                      dateController.text = DateFormat('yyyy-MM-dd').format(pickedDate);
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+                // 시간 선택
+                TextField(
+                  controller: timeController,
+                  readOnly: true,
+                  decoration: const InputDecoration(labelText: '도착 시간'),
+                  onTap: () async {
+                    final picked = await showTimePicker(
+                      context: context,
+                      initialTime: selectedTime,
+                    );
+                    if (picked != null) {
+                      selectedTime = picked;
+                      timeController.text = picked.format(context);
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: prepController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: '준비 시간 (분)'),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                child: const Text('취소'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+              TextButton(
+                child: const Text('확인'),
+                onPressed: () async {
+                  prepMinutes = int.tryParse(prepController.text) ?? 0;
+                  final arrivalDate = DateTime(
+                    selectedDate.year,
+                    selectedDate.month,
+                    selectedDate.day,
+                    selectedTime.hour,
+                    selectedTime.minute,
+                  );
+                  final arrivalIso = arrivalDate.toIso8601String();
+                  Navigator.of(context).pop();
+                  try {
+                    await _handleAlarmAction(
+                      option,
+                      summaryData,
+                      index,
+                      arrivalIso,
+                      prepMinutes,
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('알람 설정 중 오류: $e')),
+                    );
+                  }
+                },
+              ),
+            ],
+          );
+        },
+      );
+    } catch (e) {
+      debugPrint('Error showing alarm dialog: $e');
     }
   }
 }

@@ -44,4 +44,13 @@ class AlarmApiService {
       throw Exception('알람 조회 실패: ${resp.body}');
     }
   }
+
+  /// Delete an alarm by ID
+  Future<void> deleteAlarm({required String id}) async {
+    final uri = Uri.parse('$baseUrl/alarm/$id');
+    final resp = await http.delete(uri);
+    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      throw Exception('알람 삭제 실패: ${resp.body}');
+    }
+  }
 } 

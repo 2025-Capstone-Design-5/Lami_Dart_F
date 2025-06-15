@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "YOUR_PROJECT_NUMBER",
+    "project_id": "YOUR_PROJECT_ID",
+    "storage_bucket": "YOUR_PROJECT_ID.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:YOUR_PROJECT_NUMBER:android:YOUR_APP_ID",
+        "android_client_info": {
+          "package_name": "com.nam9.lami"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "169978966511-fm3lfi3ho645d2pe06ibtquck7b1i2bq.apps.googleusercontent.com.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.nam9.lami",
+            "certificate_hash": "YOUR_SHA1_FINGERPRINT"
+          }
+        },
+        {
+          "client_id": "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "YOUR_API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "169978966511-vbb2ji32kqas1a4v3bev09ln5lq0da0c.apps.googleusercontent.com.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.nam9.lami"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+} 
