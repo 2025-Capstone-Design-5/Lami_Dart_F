@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'favorite_places_page.dart';
 import 'update_page.dart';
 import 'settings_page.dart';
@@ -27,101 +28,247 @@ class _MyPageState extends State<MyPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF0A0E27),
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('내 정보'),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        elevation: 0.5,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         titleTextStyle: const TextStyle(
-          color: Colors.black,
+          color: Colors.white,
           fontWeight: FontWeight.w600,
           fontSize: 20,
         ),
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
-      backgroundColor: const Color(0xFFF3EFEE),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const SizedBox(height: 32),
-            const CircleAvatar(
-              radius: 40,
-              backgroundColor: Colors.blue,
-              child: Icon(Icons.person, size: 50, color: Colors.white),
+      body: Stack(
+        children: [
+          // Gradient background
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFF0A0E27),
+                  const Color(0xFF1A1E3A),
+                  const Color(0xFF0A0E27),
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
-            Text(
-              widget.userName,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+          // Gradient orbs
+          Positioned(
+            top: -100,
+            right: -50,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF6366F1).withOpacity(0.3),
+                    const Color(0xFF8B5CF6).withOpacity(0.1),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              widget.userEmail,
-              style: const TextStyle(fontSize: 16, color: Colors.black54),
+          ),
+          Positioned(
+            bottom: -150,
+            left: -100,
+            child: Container(
+              width: 400,
+              height: 400,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF10B981).withOpacity(0.3),
+                    const Color(0xFF34D399).withOpacity(0.1),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(height: 32),
-            // 즐겨찾는 장소 항목
-            ListTile(
-              leading: Icon(Icons.star, color: Colors.amber),
-              title: Text('자주 사용한 경로'),
-              trailing: Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const FavoritePlacesPage()),
-                );
-              },
+          ),
+          // Main content
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const SizedBox(height: 32),
+                  // Profile avatar with glass effect
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(50),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        width: 100,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(50),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.2),
+                            width: 2,
+                          ),
+                        ),
+                        child: const Icon(Icons.person, size: 50, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    widget.userName,
+                    style: const TextStyle(
+                      fontSize: 22, 
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    widget.userEmail,
+                    style: TextStyle(
+                      fontSize: 16, 
+                      color: Colors.white.withOpacity(0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  // Menu items with glass effect
+                  _buildGlassMenuItem(
+                    icon: Icons.star,
+                    iconColor: Colors.amber,
+                    title: '자주 사용한 경로',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const FavoritePlacesPage()),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _buildGlassMenuItem(
+                    icon: Icons.notifications,
+                    iconColor: Colors.blue,
+                    title: '업데이트',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const UpdatePage()),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _buildGlassMenuItem(
+                    icon: Icons.settings,
+                    iconColor: Colors.purple,
+                    title: '설정',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const SettingsPage()),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _buildGlassMenuItem(
+                    icon: Icons.logout,
+                    iconColor: Colors.orange,
+                    title: '로그아웃',
+                    onTap: () {
+                      _showLogoutConfirmationDialog(context);
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  _buildGlassMenuItem(
+                    icon: Icons.delete_sweep,
+                    iconColor: Colors.red,
+                    title: '캐시 지우기',
+                    onTap: () {
+                      _clearCache();
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _buildGlassMenuItem(
+                    icon: Icons.notifications_active,
+                    iconColor: Colors.green,
+                    title: '푸시 알림 테스트',
+                    onTap: () {
+                      _testNotification();
+                    },
+                  ),
+                ],
+              ),
             ),
-            ListTile(
-              leading: Icon(Icons.notifications),
-              title: Text('업데이트'),
-              trailing: Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const UpdatePage()),
-                );
-              },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGlassMenuItem({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.2),
             ),
-            ListTile(
-              leading: Icon(Icons.settings),
-              title: Text('설정'),
-              trailing: Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const SettingsPage()),
-                );
-              },
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: iconColor.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(icon, color: iconColor, size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: Colors.white.withOpacity(0.5),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            ListTile(
-              leading: Icon(Icons.logout),
-              title: Text('로그아웃'),
-              trailing: Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {
-                // 로그아웃 처리 및 로그인 화면으로 이동
-                _showLogoutConfirmationDialog(context);
-              },
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: Icon(Icons.delete_sweep, color: Colors.red),
-              title: Text('캐시 지우기'),
-              onTap: () {
-                _clearCache();
-              },
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: Icon(Icons.notifications_active, color: Colors.blue),
-              title: Text('푸시 알림 테스트'),
-              onTap: () {
-                _testNotification();
-              },
-            ),
-          ],
+          ),
         ),
       ),
     );

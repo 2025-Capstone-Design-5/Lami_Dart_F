@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:ui';
 import '../../main.dart';
 import '../../search_history_service.dart';
 import '../time_setting/time_setting_page.dart';
@@ -308,122 +309,220 @@ class _SearchPageState extends State<SearchPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF3EFEE),
+      backgroundColor: const Color(0xFF0A0E27),
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('출발지/도착지 검색'),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        elevation: 0.5,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         titleTextStyle: const TextStyle(
-          color: Colors.black,
+          color: Colors.white,
           fontWeight: FontWeight.w600,
           fontSize: 20,
         ),
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: Column(
+      body: Stack(
         children: [
-          // 검색창 컨테이너
+          // Gradient background
           Container(
-            margin: const EdgeInsets.all(16.0),
-            padding: const EdgeInsets.all(16.0),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.1),
-                  spreadRadius: 1,
-                  blurRadius: 5,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFF0A0E27),
+                  const Color(0xFF1A1E3A),
+                  const Color(0xFF0A0E27),
+                ],
+              ),
             ),
+          ),
+          // Gradient orbs
+          Positioned(
+            top: -100,
+            right: -50,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF6366F1).withOpacity(0.3),
+                    const Color(0xFF8B5CF6).withOpacity(0.1),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -150,
+            left: -100,
+            child: Container(
+              width: 400,
+              height: 400,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF3B82F6).withOpacity(0.3),
+                    const Color(0xFF06B6D4).withOpacity(0.1),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Main content
+          SafeArea(
             child: Column(
               children: [
-                // 출발지 검색창
-                _buildSearchField(
-                  controller: _departureController,
-                  hintText: '출발지를 입력하세요',
-                  icon: Icons.my_location,
-                  iconColor: Colors.blue,
-                  isDeparture: true,
-                ),
-                
-                // 교환 버튼
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
-                  child: Row(
-                    children: [
-                      Expanded(child: Container()),
-                      Container(
+                // 검색창 컨테이너
+                Container(
+                  margin: const EdgeInsets.all(16.0),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                      child: Container(
+                        padding: const EdgeInsets.all(20.0),
                         decoration: BoxDecoration(
-                          color: Colors.grey[100],
+                          color: Colors.white.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.2),
+                            width: 1.5,
+                          ),
                         ),
-                        child: IconButton(
-                          onPressed: _swapLocations,
-                          icon: const Icon(Icons.swap_vert, color: Colors.grey),
-                          tooltip: '출발지/도착지 교환',
+                        child: Column(
+                          children: [
+                            // 출발지 검색창
+                            _buildSearchField(
+                              controller: _departureController,
+                              hintText: '출발지를 입력하세요',
+                              icon: Icons.my_location,
+                              iconColor: Colors.blue,
+                              isDeparture: true,
+                            ),
+                            
+                            // 교환 버튼
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12.0),
+                              child: Row(
+                                children: [
+                                  Expanded(child: Container()),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: BackdropFilter(
+                                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(
+                                            color: Colors.white.withOpacity(0.2),
+                                          ),
+                                        ),
+                                        child: IconButton(
+                                          onPressed: _swapLocations,
+                                          icon: const Icon(Icons.swap_vert, color: Colors.white),
+                                          tooltip: '출발지/도착지 교환',
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(child: Container()),
+                                ],
+                              ),
+                            ),
+                            
+                            // 목적지 검색창
+                            _buildSearchField(
+                              controller: _destinationController,
+                              hintText: '도착지를 입력하세요',
+                              icon: Icons.location_on,
+                              iconColor: Colors.red,
+                              isDeparture: false,
+                            ),
+                          ],
                         ),
                       ),
-                      Expanded(child: Container()),
-                    ],
+                    ),
                   ),
                 ),
                 
-                // 목적지 검색창
-                _buildSearchField(
-                  controller: _destinationController,
-                  hintText: '도착지를 입력하세요',
-                  icon: Icons.location_on,
-                  iconColor: Colors.red,
-                  isDeparture: false,
+                // 검색 결과 또는 검색 기록 표시
+                Expanded(
+                  child: showSearchResults && searchResults.isNotEmpty
+                      ? _buildSearchResults()
+                      : _buildSearchHistory(),
                 ),
+                
+                // 경로 정보 표시
+                if (showMap && searchedDeparture != null && searchedDestination != null) ...[
+                  _buildRouteInfo(),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Colors.blue.withOpacity(0.5),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () {
+                                // Navigate to lookup page with loading indicator
+                                final from = searchedDepartureAddress ?? searchedDeparture!;
+                                final to = searchedDestinationAddress ?? searchedDestination!;
+                                final now = DateTime.now();
+                                final dateStr = DateFormat('yyyy-MM-dd').format(now);
+                                final timeStr = DateFormat('HH:mm:ss').format(now);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => RouteLookupPage(
+                                      from: from,
+                                      to: to,
+                                      date: dateStr,
+                                      time: timeStr,
+                                    ),
+                                  ),
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(20),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                child: Text(
+                                  '확인',
+                                  style: TextStyle(
+                                    color: Colors.blue,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
-          
-          // 검색 결과 또는 검색 기록 표시
-          Expanded(
-            child: showSearchResults && searchResults.isNotEmpty
-                ? _buildSearchResults()
-                : _buildSearchHistory(),
-          ),
-          
-          // 경로 정보 표시
-          if (showMap && searchedDeparture != null && searchedDestination != null) ...[
-            _buildRouteInfo(),
-            const SizedBox(height: 16),
-            Center(
-              child: ElevatedButton(
-                onPressed: () {
-                  // Navigate to lookup page with loading indicator
-                  final from = searchedDepartureAddress ?? searchedDeparture!;
-                  final to = searchedDestinationAddress ?? searchedDestination!;
-                  final now = DateTime.now();
-                  final dateStr = DateFormat('yyyy-MM-dd').format(now);
-                  final timeStr = DateFormat('HH:mm:ss').format(now);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => RouteLookupPage(
-                        from: from,
-                        to: to,
-                        date: dateStr,
-                        time: timeStr,
-                      ),
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('확인'),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -438,8 +537,9 @@ class _SearchPageState extends State<SearchPage> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey[300]!),
-        borderRadius: BorderRadius.circular(8),
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.2)),
       ),
       child: Row(
         children: [
@@ -448,13 +548,15 @@ class _SearchPageState extends State<SearchPage> {
               controller: controller,
               onChanged: _onSearchChanged, // 매개변수 수정됨
               onTap: () => _onFieldTapped(isDeparture),
+              style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 hintText: hintText,
+                hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
                 prefixIcon: Icon(icon, color: iconColor),
                 suffixIcon: controller.text.isNotEmpty
                     ? IconButton(
                         onPressed: () => _clearField(controller, isDeparture),
-                        icon: const Icon(Icons.clear, color: Colors.grey),
+                        icon: Icon(Icons.clear, color: Colors.white.withOpacity(0.7)),
                       )
                     : null,
                 border: InputBorder.none,
@@ -585,93 +687,115 @@ class _SearchPageState extends State<SearchPage> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+          width: 1,
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '최근 검색',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[800],
-                  ),
-                ),
-                if (searchHistory.isNotEmpty)
-                  TextButton(
-                    onPressed: _clearAllHistory,
-                    child: const Text('전체 삭제'),
-                  ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: searchHistory.isNotEmpty
-                ? ListView.builder(
-                    itemCount: searchHistory.length,
-                    itemBuilder: (context, index) {
-                      final place = searchHistory[index];
-                      return ListTile(
-                        leading: const Icon(
-                          Icons.history,
-                          color: Colors.grey,
-                        ),
-                        title: Text(
-                          place['name'],
-                          style: const TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                        subtitle: Text(
-                          place['address'],
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.close, size: 18, color: Colors.grey),
-                          onPressed: () => _removeHistoryItem(place),
-                        ),
-                        onTap: () => _selectHistoryItem(place),
-                      );
-                    },
-                  )
-                : Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.history,
-                            size: 48,
-                            color: Colors.grey[400],
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            '검색 기록이 없습니다',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '최근 검색',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white.withOpacity(0.9),
                       ),
                     ),
-                  ),
+                    if (searchHistory.isNotEmpty)
+                      TextButton(
+                        onPressed: _clearAllHistory,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red[300],
+                        ),
+                        child: const Text('전체 삭제'),
+                      ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: searchHistory.isNotEmpty
+                    ? ListView.builder(
+                        itemCount: searchHistory.length,
+                        itemBuilder: (context, index) {
+                          final place = searchHistory[index];
+                          return ListTile(
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.history,
+                                color: Colors.white.withOpacity(0.7),
+                                size: 20,
+                              ),
+                            ),
+                            title: Text(
+                              place['name'],
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                              ),
+                            ),
+                            subtitle: Text(
+                              place['address'],
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.6),
+                              ),
+                            ),
+                            trailing: IconButton(
+                              icon: Icon(
+                                Icons.close,
+                                size: 18,
+                                color: Colors.white.withOpacity(0.5),
+                              ),
+                              onPressed: () => _removeHistoryItem(place),
+                            ),
+                            onTap: () => _selectHistoryItem(place),
+                          );
+                        },
+                      )
+                    : Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32.0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.history,
+                                size: 48,
+                                color: Colors.white.withOpacity(0.3),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                '검색 기록이 없습니다',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.white.withOpacity(0.5),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -903,16 +1027,24 @@ class _SearchPageState extends State<SearchPage> {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(20.0),
-          child: CircularProgressIndicator(),
+          child: CircularProgressIndicator(
+            color: Colors.white,
+          ),
         ),
       );
     }
 
     if (tmapSearchResults.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(20.0),
-          child: Text('검색 결과가 없습니다.'),
+          padding: const EdgeInsets.all(20.0),
+          child: Text(
+            '검색 결과가 없습니다.',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: 16,
+            ),
+          ),
         ),
       );
     }
@@ -920,58 +1052,72 @@ class _SearchPageState extends State<SearchPage> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+          width: 1,
+        ),
       ),
-      child: ListView.separated(
-        shrinkWrap: true,
-        itemCount: tmapSearchResults.length,
-        separatorBuilder: (context, index) => const Divider(height: 1),
-        itemBuilder: (context, index) {
-          final place = tmapSearchResults[index];
-          return ListTile(
-            leading: Icon(
-              Icons.location_on,
-              color: isDepartureSearch ? Colors.blue : Colors.red,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: tmapSearchResults.length,
+            separatorBuilder: (context, index) => Divider(
+              height: 1,
+              color: Colors.white.withOpacity(0.2),
             ),
-            title: Text(
-              place.name,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-              ),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  place.address,
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
+            itemBuilder: (context, index) {
+              final place = tmapSearchResults[index];
+              return ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: (isDepartureSearch ? Colors.blue : Colors.red).withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.location_on,
+                    color: isDepartureSearch ? Colors.blue : Colors.red,
+                    size: 20,
                   ),
                 ),
-                if (place.category != null && place.category!.isNotEmpty)
-                  Text(
-                    place.category!,
-                    style: TextStyle(
-                      color: Colors.blue[600],
-                      fontSize: 12,
-                    ),
+                title: Text(
+                  place.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    color: Colors.white,
                   ),
-              ],
-            ),
-            onTap: () => _selectTmapPlace(place),
-          );
-        },
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      place.address,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.7),
+                        fontSize: 14,
+                      ),
+                    ),
+                    if (place.category != null && place.category!.isNotEmpty)
+                      Text(
+                        place.category!,
+                        style: TextStyle(
+                          color: Colors.blue[300],
+                          fontSize: 12,
+                        ),
+                      ),
+                  ],
+                ),
+                onTap: () => _selectTmapPlace(place),
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -1000,10 +1146,16 @@ class _SearchPageState extends State<SearchPage> {
 
   Widget _buildLocalSearchResults() {
     if (searchResults.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(20.0),
-          child: Text('검색 결과가 없습니다.'),
+          padding: const EdgeInsets.all(20.0),
+          child: Text(
+            '검색 결과가 없습니다.',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: 16,
+            ),
+          ),
         ),
       );
     }
@@ -1011,45 +1163,59 @@ class _SearchPageState extends State<SearchPage> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+          width: 1,
+        ),
       ),
-      child: ListView.separated(
-        shrinkWrap: true,
-        itemCount: searchResults.length,
-        separatorBuilder: (context, index) => const Divider(height: 1),
-        itemBuilder: (context, index) {
-          final location = searchResults[index];
-          return ListTile(
-            leading: Icon(
-              Icons.location_on,
-              color: isDepartureSearch ? Colors.blue : Colors.red,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: searchResults.length,
+            separatorBuilder: (context, index) => Divider(
+              height: 1,
+              color: Colors.white.withOpacity(0.2),
             ),
-            title: Text(
-              location['name']!,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-              ),
-            ),
-            subtitle: Text(
-              location['address']!,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 14,
-              ),
-            ),
-            onTap: () => _selectLocation(location),
-          );
-        },
+            itemBuilder: (context, index) {
+              final location = searchResults[index];
+              return ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: (isDepartureSearch ? Colors.blue : Colors.red).withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.location_on,
+                    color: isDepartureSearch ? Colors.blue : Colors.red,
+                    size: 20,
+                  ),
+                ),
+                title: Text(
+                  location['name']!,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    color: Colors.white,
+                  ),
+                ),
+                subtitle: Text(
+                  location['address']!,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 14,
+                  ),
+                ),
+                onTap: () => _selectLocation(location),
+              );
+            },
+          ),
+        ),
       ),
     );
   }

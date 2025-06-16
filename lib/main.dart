@@ -10,6 +10,7 @@ import 'dart:io';
 import 'package:provider/provider.dart';
 import 'providers/auth_state.dart';
 import 'services/notification_service.dart';
+import 'dart:ui';
 
 /// 앱 시작 전에 환경변수를 로드합니다
 Future<void> main() async {
@@ -84,6 +85,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF0A0E27),
       body: IndexedStack(
         index: selectedNavIndex,
         children: [
@@ -97,25 +99,42 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: selectedNavIndex,
-        onTap: (index) {
-          setState(() {
-            selectedNavIndex = index;
-          });
-        },
-        backgroundColor: const Color(0xFFF8F2F7),
-        selectedItemColor: Colors.blue,
-        unselectedItemColor: Colors.grey,
-        type: BottomNavigationBarType.fixed,
-        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
-        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w400),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: '홈'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: '달력'),
-          BottomNavigationBarItem(icon: Icon(Icons.headset), label: '라미'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: '내 정보'),
-        ],
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.1),
+          border: Border(
+            top: BorderSide(
+              color: Colors.white.withOpacity(0.2),
+              width: 1,
+            ),
+          ),
+        ),
+        child: ClipRRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: BottomNavigationBar(
+              currentIndex: selectedNavIndex,
+              onTap: (index) {
+                setState(() {
+                  selectedNavIndex = index;
+                });
+              },
+              backgroundColor: Colors.transparent,
+              selectedItemColor: Colors.blue,
+              unselectedItemColor: Colors.white.withOpacity(0.6),
+              type: BottomNavigationBarType.fixed,
+              selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w400),
+              elevation: 0,
+              items: const [
+                BottomNavigationBarItem(icon: Icon(Icons.home), label: '홈'),
+                BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: '달력'),
+                BottomNavigationBarItem(icon: Icon(Icons.headset), label: '라미'),
+                BottomNavigationBarItem(icon: Icon(Icons.person), label: '내 정보'),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

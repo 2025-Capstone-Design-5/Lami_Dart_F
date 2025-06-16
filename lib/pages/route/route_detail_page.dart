@@ -245,7 +245,13 @@ class RouteDetailPage extends StatelessWidget {
                                       : Colors.grey.shade100,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: Text(label, style: TextStyle(fontSize: 14, color: isFirst || isLast ? iconColor : Colors.black87)),
+                                child: Text(
+                                  label,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: isFirst || isLast ? iconColor : Colors.white,
+                                  ),
+                                ),
                               ),
                             ),
                           ],

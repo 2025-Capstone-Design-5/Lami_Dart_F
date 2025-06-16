@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:ui';
 import '../../favorite_service.dart';
 import '../../models/favorite_route_model.dart';
 import '../../services/tmap_service.dart';
@@ -76,53 +77,130 @@ class _FavoriteManagementPageState extends State<FavoriteManagementPage> with Si
     final filteredFavorites = _getFilteredFavorites();
 
     return Scaffold(
+      backgroundColor: const Color(0xFF0A0E27),
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('즐겨찾기 관리'),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        elevation: 0.5,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         titleTextStyle: const TextStyle(
-          color: Colors.black,
+          color: Colors.white,
           fontWeight: FontWeight.w600,
           fontSize: 20,
         ),
-        iconTheme: const IconThemeData(color: Colors.black),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: '즐겨찾기 목록'),
-            Tab(text: '출발지 추가'),
-            Tab(text: '목적지 추가'),
-          ],
-          labelColor: Colors.blue,
-          unselectedLabelColor: Colors.grey,
-          indicatorColor: Colors.blue,
+        iconTheme: const IconThemeData(color: Colors.white),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: ClipRRect(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Colors.white.withOpacity(0.2),
+                    ),
+                  ),
+                ),
+                child: TabBar(
+                  controller: _tabController,
+                  tabs: const [
+                    Tab(text: '즐겨찾기 목록'),
+                    Tab(text: '출발지 추가'),
+                    Tab(text: '목적지 추가'),
+                  ],
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Colors.white.withOpacity(0.6),
+                  indicatorColor: Colors.blue,
+                ),
+              ),
+            ),
+          ),
         ),
       ),
-      backgroundColor: const Color(0xFFF3EFEE),
-      body: TabBarView(
-        controller: _tabController,
+      body: Stack(
         children: [
-          // 첫 번째 탭: 즐겨찾기 목록
-          Column(
-            children: [
-              // 카테고리 필터 탭
-              _buildCategoryTabs(),
-              
-              // 즐겨찾기 목록
-              Expanded(
-                child: filteredFavorites.isEmpty
-                    ? _buildEmptyState()
-                    : _buildFavoritesList(filteredFavorites),
+          // Gradient background
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFF0A0E27),
+                  const Color(0xFF1A1E3A),
+                  const Color(0xFF0A0E27),
+                ],
               ),
-            ],
+            ),
           ),
-          
-          // 두 번째 탭: 출발지 추가
-          _buildAddFavoriteTab(true),
-          
-          // 세 번째 탭: 목적지 추가
-          _buildAddFavoriteTab(false),
+          // Gradient orbs
+          Positioned(
+            top: -50,
+            right: -50,
+            child: Container(
+              width: 250,
+              height: 250,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFFF59E0B).withOpacity(0.3),
+                    const Color(0xFFF59E0B).withOpacity(0.1),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -100,
+            left: -50,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF3B82F6).withOpacity(0.3),
+                    const Color(0xFF06B6D4).withOpacity(0.1),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Main content
+          SafeArea(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                // 첫 번째 탭: 즐겨찾기 목록
+                Column(
+                  children: [
+                    // 카테고리 필터 탭
+                    _buildCategoryTabs(),
+                    
+                    // 즐겨찾기 목록
+                    Expanded(
+                      child: filteredFavorites.isEmpty
+                          ? _buildEmptyState()
+                          : _buildFavoritesList(filteredFavorites),
+                    ),
+                  ],
+                ),
+                
+                // 두 번째 탭: 출발지 추가
+                _buildAddFavoriteTab(true),
+                
+                // 세 번째 탭: 목적지 추가
+                _buildAddFavoriteTab(false),
+              ],
+            ),
+          ),
         ],
       ),
     );

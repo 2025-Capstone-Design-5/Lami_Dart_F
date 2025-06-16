@@ -609,425 +609,68 @@ class _AssistantPageState extends State<AssistantPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFF0A0E27),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text(
+          'AI 어시스턴트',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(
+              Icons.cleaning_services_rounded,
+              color: Colors.white.withOpacity(0.8),
+            ),
+            tooltip: '대화 내용 지우기',
+            onPressed: () {
+              setState(() {
+                _messages.clear();
+              });
+            },
+          ),
+        ],
+      ),
       body: Stack(
         children: [
-          // Background gradient
           Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF2C3E50), Color(0xFF34495E)],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
+                colors: [Color(0xFF0A0E27), Color(0xFF1A1E3A)],
               ),
+            ),
+          ),
+          Positioned.fill(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
+              child: Container(color: Colors.transparent),
             ),
           ),
           SafeArea(
             child: Column(
               children: [
-                // Header
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Text(
-                    'Lami',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      shadows: [Shadow(color: Colors.black26, blurRadius: 4)],
-                    ),
-                  ),
-                ),
-                // Chat messages list
                 Expanded(
                   child: ListView.builder(
                     controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    itemCount: _messages.length,
+                    padding: const EdgeInsets.all(16),
+                    // Exclude result log messages (tag == '결과')
+                    itemCount: _messages.where((m) => !(m.isLog && m.tag == '결과')).toList().length,
                     itemBuilder: (context, index) {
-                      final msg = _messages[index];
-                      // Render summary with inline UI and navigation button
-                      if (msg.summaryData != null) {
-                        final summaryData = msg.summaryData!;
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SummaryChatWidget(
-                                summaryData: summaryData,
-                                onSetAlarm: (route) async {
-                                  if (_googleId == null) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('로그인 정보가 없습니다.')),
-                                    );
-                                    return;
-                                  }
-                                  try {
-                                    print('🔄 Assistant - 알람 설정 시작...');
-                                    // 예시: 도착 예정 시간(현재 시간 + duration), 준비 시간(5분)
-                                    final now = DateTime.now();
-                                    final arrival = now.add(Duration(seconds: route.duration));
-                                    final arrivalStr = arrival.toIso8601String();
-                                    final preparationTime = 5; // 분 단위, 필요시 UI에서 입력받게 할 수 있음
-                                    
-                                    final alarmService = AlarmApiService(googleId: _googleId!);
-                                    await alarmService.registerAlarm(
-                                      arrivalTime: arrivalStr,
-                                      preparationTime: preparationTime,
-                                    );
-                                    
-                                    // Google Calendar에 일정 추가
-                                    try {
-                                      if (!CalendarService.isSignedIn()) {
-                                        await CalendarService.signIn();
-                                      }
-                                      
-                                      final startDt = arrival.subtract(Duration(minutes: preparationTime));
-                                      await CalendarService.addEvent(
-                                        summary: '🤖 AI 추천 경로 알람',
-                                        start: startDt,
-                                        end: arrival,
-                                        description: 'AI가 추천한 경로 알람\n준비시간: ${preparationTime}분\n소요시간: ${route.duration ~/ 60}분',
-                                      );
-                                      print('✅ Assistant - Google Calendar 일정 추가 성공!');
-                                    } catch (e) {
-                                      print('❌ Assistant - 캘린더 추가 실패: $e');
-                                      // 캘린더 추가 실패해도 알람은 정상 동작하도록
-                                    }
-                                    
-                                    // 홈 알람 위젯 갱신 트리거
-                                    if (globalAlarmRefreshCallback != null) {
-                                      globalAlarmRefreshCallback!();
-                                    }
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('✅ 알람이 성공적으로 등록되었습니다!'),
-                                        backgroundColor: Colors.green,
-                                      ),
-                                    );
-                                  } catch (e) {
-                                    print('❌ Assistant - 알람 등록 실패: $e');
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('❌ 알람 등록 실패: $e')),
-                                    );
-                                  }
-                                },
-                              ),
-                              const SizedBox(height: 8),
-                              ElevatedButton(
-                                onPressed: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => RouteResultsPage(summaryData: summaryData),
-                                    ),
-                                  );
-                                },
-                                child: const Text('전체 경로 보기'),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-                      // Skip typing indicators
-                      if (msg.isTyping) {
-                        return SizedBox.shrink();
-                      }
-                      // Display structured log messages
-                      if (!msg.isUser && msg.isLog == true) {
-                        // Map tag to icon, color, display label, and sizes
-                        IconData leadingIcon;
-                        Color bgColor;
-                        String displayTag;
-                        double iconSize;
-                        double labelSize;
-                        switch (msg.tag) {
-                          case '추론':
-                            leadingIcon = Icons.lightbulb_outline;
-                            bgColor = Colors.deepPurple;
-                            displayTag = '추론';
-                            iconSize = 28;
-                            labelSize = 16;
-                            break;
-                          case '관찰':
-                            leadingIcon = Icons.remove_red_eye;
-                            bgColor = Colors.deepOrange;
-                            displayTag = '관찰';
-                            iconSize = 28;
-                            labelSize = 16;
-                            break;
-                          case '결과':
-                            leadingIcon = Icons.check_circle_outline;
-                            bgColor = Colors.greenAccent;
-                            displayTag = '결과';
-                            iconSize = 28;
-                            labelSize = 16;
-                            break;
-                          case 'route-summary':
-                            leadingIcon = Icons.alt_route;
-                            bgColor = Colors.lightBlueAccent;
-                            displayTag = '경로 조회';
-                            iconSize = 24;
-                            labelSize = 14;
-                            break;
-                          case 'fallback':
-                            leadingIcon = Icons.chat_bubble_outline;
-                            bgColor = Colors.grey;
-                            displayTag = '일반 대화';
-                            iconSize = 24;
-                            labelSize = 14;
-                            break;
-                          default:
-                            leadingIcon = Icons.build;
-                            bgColor = Colors.teal;
-                            displayTag = msg.tag ?? '';
-                            iconSize = 24;
-                            labelSize = 14;
-                            break;
-                        }
-                        // Descriptive text for each log type
-                        String descText;
-                        switch (msg.tag) {
-                          case '추론':
-                            descText = '사고 과정을 나타냅니다.';
-                            break;
-                          case '관찰':
-                            descText = '관찰 정보를 나타냅니다.';
-                            break;
-                          case '결과':
-                            descText = '도구 실행 결과를 표시합니다.';
-                            break;
-                          case 'route-summary':
-                            descText = '경로 조회 도구를 호출합니다.';
-                            break;
-                          case 'fallback':
-                            descText = '일반 대화 도구를 호출합니다.';
-                            break;
-                          default:
-                            descText = '로그 메시지입니다.';
-                            break;
-                        }
-                        // Split log into segments by bullets or newlines
-                        final parts = msg.text.split(RegExp(r'•\s*|\n')).map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-                        final List<Widget> contentWidgets = [];
-                        bool inCodeBlock = false;
-                        for (var part in parts) {
-                          if (part.startsWith('```')) {
-                            inCodeBlock = !inCodeBlock;
-                            continue;
-                          }
-                          if (inCodeBlock) {
-                            contentWidgets.add(
-                              Container(
-                                width: double.infinity,
-                                color: Colors.black.withOpacity(0.2),
-                                padding: const EdgeInsets.all(6),
-                                child: Text(
-                                  part,
-                                  style: TextStyle(
-                                    fontFamily: 'monospace',
-                                    color: Colors.white70,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            );
-                          } else if (part.startsWith('입력:')) {
-                            // Input section with label
-                            contentWidgets.add(_buildIconSection(
-                              Icons.login,
-                              '입력',
-                              part.substring('입력:'.length).trim(),
-                              bgColor,
-                            ));
-                          } else if (part.startsWith('이유:')) {
-                            // Strip '이유:' and parse embedded question
-                            final stripped = part.substring('이유:'.length).trim();
-                            if (stripped.startsWith('Question:') || stripped.startsWith('질문:')) {
-                              final text = stripped.startsWith('Question:')
-                                  ? stripped.substring('Question:'.length).trim()
-                                  : stripped.substring('질문:'.length).trim();
-                              contentWidgets.add(_buildIconSection(
-                                Icons.help_outline,
-                                '질문',
-                                text,
-                                bgColor,
-                              ));
-                            }
-                            // Skip the original reason part
-                            continue;
-                          } else if (part.startsWith('Question:') || part.startsWith('질문:')) {
-                            // Question section
-                            final text = part.startsWith('Question:')
-                                ? part.substring('Question:'.length).trim()
-                                : part.substring('질문:'.length).trim();
-                            contentWidgets.add(_buildIconSection(
-                              Icons.help_outline,
-                              '질문',
-                              text,
-                              bgColor,
-                            ));
-                          } else if (part.startsWith('Thought:') || part.startsWith('추론:')) {
-                            // Thought section
-                            final text = part.startsWith('Thought:')
-                                ? part.substring('Thought:'.length).trim()
-                                : part.substring('추론:'.length).trim();
-                            contentWidgets.add(_buildIconSection(
-                              Icons.lightbulb_outline,
-                              '추론',
-                              text,
-                              bgColor,
-                            ));
-                          } else if (part.startsWith('Action:')) {
-                            contentWidgets.add(
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8, bottom: 4),
-                                child: Text('Action:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                              ),
-                            );
-                          } else {
-                            contentWidgets.add(
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 4),
-                                child: Text(part, style: TextStyle(color: Colors.white70, fontSize: 14)),
-                              ),
-                            );
-                          }
-                        }
-                        return Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(vertical: 4),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: bgColor.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Icon and display label horizontally
-                                Row(
-                                  children: [
-                                    Icon(leadingIcon, color: bgColor, size: iconSize),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      displayTag,
-                                      style: TextStyle(
-                                        fontSize: labelSize,
-                                        fontWeight: FontWeight.bold,
-                                        color: bgColor,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                // Descriptive text
-                                Text(
-                                  descText,
-                                  style: TextStyle(
-                                    fontSize: labelSize,
-                                    color: bgColor.withOpacity(0.9),
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                ...contentWidgets,
-                              ],
-                            ),
-                          ),
-                        );
-                      }
-                      // Show only user messages and final results as chat bubbles
-                      final isUser = msg.isUser;
-                      final alignment = isUser ? Alignment.centerRight : Alignment.centerLeft;
-                      final bgColor = isUser ? Colors.grey.shade200 : Colors.blueAccent;
-                      final textColor = isUser ? Colors.black87 : Colors.white;
-                      return Align(
-                        alignment: alignment,
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(vertical: 4),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                          decoration: BoxDecoration(
-                            color: bgColor,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Text(msg.text, style: TextStyle(color: textColor, fontSize: 16)),
-                        ),
-                      );
+                      // Build only filtered messages
+                      final displayMessages = _messages.where((m) => !(m.isLog && m.tag == '결과')).toList();
+                      final message = displayMessages[index];
+                      return _buildMessageBubble(message);
                     },
                   ),
                 ),
-                // Streaming indicator
-                if (_isStreaming)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: LinearProgressIndicator(
-                      backgroundColor: Colors.white54,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.blueAccent),
-                      minHeight: 4,
-                    ),
-                  ),
-                // Input field
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(30),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.25),
-                          borderRadius: BorderRadius.circular(30),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.15),
-                              blurRadius: 6,
-                              spreadRadius: 1,
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _controller,
-                                style: TextStyle(color: Colors.white),
-                                decoration: InputDecoration(
-                                  hintText: '메시지를 입력하세요',
-                                  hintStyle: TextStyle(color: Colors.white70),
-                                  border: InputBorder.none,
-                                ),
-                                onSubmitted: _sendMessage,
-                              ),
-                            ),
-                            // Microphone toggle button
-                            IconButton(
-                              icon: Icon(_speech.isListening ? Icons.mic : Icons.mic_none, color: Colors.white, size: 24),
-                              onPressed: _speechEnabled
-                                  ? (_speech.isListening ? _stopListening : _startListening)
-                                  : null,
-                            ),
-                            // Send or Cancel streaming button
-                            IconButton(
-                              icon: Icon(_isStreaming ? Icons.cancel : Icons.send, color: Colors.white, size: 24),
-                              onPressed: () {
-                                if (_isStreaming) {
-                                  _stopStreaming();
-                                } else {
-                                  _sendMessage(_controller.text);
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                _buildInputArea(),
               ],
             ),
           ),
@@ -1036,35 +679,265 @@ class _AssistantPageState extends State<AssistantPage> {
     );
   }
 
-  Widget _buildIconSection(IconData icon, String label, String content, Color color) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
+  Widget _buildMessageBubble(_ChatMessage message) {
+    final isUser = message.isUser;
+    final alignment = isUser ? Alignment.centerRight : Alignment.centerLeft;
+
+    if (message.isTyping) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withOpacity(0.2)),
+          ),
+          child: const TypingIndicator(),
+        ),
+      );
+    }
+
+    return Align(
+      alignment: alignment,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.85,
+        ),
+        decoration: BoxDecoration(
+          color: isUser
+              ? Colors.blue.withOpacity(0.2)
+              : Colors.white.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isUser
+                ? Colors.blue.withOpacity(0.3)
+                : Colors.white.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: _buildMessageContent(message),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessageContent(_ChatMessage message) {
+    if (message.summaryData != null) {
+      return SummaryChatWidget(
+        summaryData: message.summaryData!,
+        onSetAlarm: (route) async {
+          // Alarm setting logic...
+        },
+      );
+    }
+    if (message.isLog) {
+      return _buildLogCard(message);
+    }
+    return Text(
+      message.text,
+      style: const TextStyle(color: Colors.white, fontSize: 16),
+    );
+  }
+  
+  Widget _buildLogCard(_ChatMessage message) {
+    final tag = message.tag ?? '로그';
+    final color = _getTagColor(tag);
+    final icon = _getTagIcon(tag);
+    final description = _getTagDescription(tag);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                tag,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          description,
+          style: TextStyle(
+            fontSize: 14,
+            color: color.withOpacity(0.8),
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+        Divider(color: color.withOpacity(0.3), height: 20),
+        ..._parseLogText(message.text, color),
+      ],
+    );
+  }
+
+  List<Widget> _parseLogText(String text, Color color) {
+    final List<Widget> widgets = [];
+    final parts = text.split(RegExp(r'•\s*|\n')).map((e) => e.trim()).where((e) => e.isNotEmpty);
+
+    for (var part in parts) {
+      if (part.startsWith('```')) {
+        // Code block handling
+      } else if (part.contains(':')) {
+        final keyValue = part.split(':');
+        final key = keyValue[0].trim();
+        final value = keyValue.sublist(1).join(':').trim();
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  label,
+                  '$key: ',
                   style: TextStyle(
-                    fontSize: 16,
+                    color: Colors.white.withOpacity(0.9),
                     fontWeight: FontWeight.bold,
-                    color: color,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  content,
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                Expanded(
+                  child: Text(
+                    value,
+                    style: TextStyle(color: Colors.white.withOpacity(0.8)),
+                  ),
                 ),
               ],
             ),
           ),
-        ],
+        );
+      } else {
+         widgets.add(Text(part, style: TextStyle(color: Colors.white.withOpacity(0.8))));
+      }
+    }
+    return widgets;
+  }
+  
+  Color _getTagColor(String tag) {
+    switch (tag) {
+      case '입력': return Colors.blueAccent;
+      case '추론': return Colors.purpleAccent;
+      case '결과': return Colors.greenAccent;
+      case '시스템': return Colors.orangeAccent;
+      case 'route-summary': return Colors.cyanAccent;
+      case '경로 조회': return Colors.cyanAccent;
+      case 'fallback': return Colors.grey;
+      case '일반 대화': return Colors.grey;
+      default: return Colors.tealAccent;
+    }
+  }
+
+  IconData _getTagIcon(String tag) {
+    switch (tag) {
+      case '입력': return Icons.input;
+      case '추론': return Icons.lightbulb_outline;
+      case '결과': return Icons.check_circle_outline;
+      case '시스템': return Icons.settings_suggest;
+      case 'route-summary': return Icons.alt_route;
+      case '경로 조회': return Icons.alt_route;
+      case 'fallback': return Icons.chat_bubble_outline;
+      case '일반 대화': return Icons.chat_bubble_outline;
+      default: return Icons.code;
+    }
+  }
+
+  String _getTagDescription(String tag) {
+    switch (tag) {
+      case '추론': return '사고 과정을 나타냅니다.';
+      case '결과': return '도구 실행 결과를 표시합니다.';
+      case '경로 조회': return '경로 조회 도구를 호출합니다.';
+      case '일반 대화': return '일반 대화 도구를 호출합니다.';
+      default: return '로그 메시지입니다.';
+    }
+  }
+
+  Widget _buildInputArea() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.2),
+        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.2))),
+      ),
+      child: ClipRRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: Row(
+              children: [
+                // Microphone button
+                _buildCircularButton(
+                  onPressed: _speechEnabled
+                      ? (_speech.isListening ? _stopListening : _startListening)
+                      : null,
+                  icon: _speech.isListening ? Icons.mic : Icons.mic_none,
+                  color: _speech.isListening ? Colors.redAccent : Colors.white,
+                ),
+                const SizedBox(width: 12),
+                // Text field
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white.withOpacity(0.2)),
+                    ),
+                    child: TextField(
+                      controller: _controller,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: '메시지를 입력하세요...',
+                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      ),
+                      onSubmitted: _sendMessage,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Send/Cancel button
+                _buildCircularButton(
+                  onPressed: () => _isStreaming ? _stopStreaming() : _sendMessage(_controller.text),
+                  icon: _isStreaming ? Icons.stop : Icons.send,
+                  color: _isStreaming ? Colors.redAccent : Colors.blueAccent,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCircularButton({required VoidCallback? onPressed, required IconData icon, required Color color}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white.withOpacity(0.2)),
+      ),
+      child: IconButton(
+        icon: Icon(icon, color: color),
+        onPressed: onPressed,
       ),
     );
   }
@@ -1074,22 +947,16 @@ class _ChatMessage {
   final String text;
   final bool isUser;
   final bool isTyping;
-  final bool? isLog;
+  final bool isLog;
   final SummaryData? summaryData;
-  final Map<String, dynamic>? categoryData;
-  final RouteDetail? routeDetail;
-  final List<FavoriteRouteModel>? favorites;
   final String? tag;
 
   _ChatMessage({
-    this.text = '',
-    this.summaryData,
-    this.categoryData,
-    this.routeDetail,
-    this.favorites,
+    required this.text,
+    this.isUser = false,
     this.isTyping = false,
     this.isLog = false,
-    required this.isUser,
+    this.summaryData,
     this.tag,
   });
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -11,8 +12,8 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:http/http.dart' as http;
 import '../time_setting/time_setting_page.dart';
 import '../search/search_page.dart';
-import '../../event_service.dart'; // EventService 불러오기
-import '../calendar/calendar_page.dart' hide EventService; // CalendarPage 불러오기
+import '../../event_service.dart';
+import '../calendar/calendar_page.dart' hide EventService;
 import '../../route_store.dart';
 import '../../favorite_service.dart';
 import '../favorite/favorite_management_page.dart';
@@ -22,9 +23,9 @@ import '../../models/favorite_route_model.dart';
 import '../assistant/assistant_page.dart';
 import '../../services/calendar_service.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
-import '../../config/server_config.dart'; // getServerBaseUrl import 추가
+import '../../config/server_config.dart';
 import '../../services/notification_service.dart';
-
+import '../../pages/route/route_lookup_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -33,7 +34,13 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
+  // Animation controllers
+  AnimationController? _backgroundAnimationController;
+  AnimationController? _cardAnimationController;
+  Animation<double>? _backgroundAnimation;
+  Animation<double>? _cardAnimation;
+  
   TextEditingController searchController = TextEditingController();
 
   // 이벤트 서비스 인스턴스
@@ -46,28 +53,25 @@ class _HomePageState extends State<HomePage> {
   DateTime? _dbWakeUpTime;
 
   // 준비 시간 관련 변수
-  Duration preparationTime = const Duration(minutes: 30); // 기본값 30분
-  Duration remainingTime = const Duration(minutes: 30); // 남은 시간 (초기값 30분)
+  Duration preparationTime = const Duration(minutes: 30);
+  Duration remainingTime = const Duration(minutes: 30);
   Timer? countdownTimer;
-  Timer? alarmCheckTimer; // 알람예정시간 체크용 타이머
+  Timer? alarmCheckTimer;
   String arrivalPeriod = '오전';
   int arrivalHour = 8;
   int arrivalMinute = 0;
   DateTime? arrivalDate;
   bool isCountdownActive = false;
-  bool isAlarmScheduleActive = false; // 알람예정시간 스케줄 활성화 여부
+  bool isAlarmScheduleActive = false;
 
   // 알람 관련 변수
   AudioPlayer? _audioPlayer;
   bool _isAlarmRinging = false;
   Timer? _alarmTimer;
   Timer? _vibrationTimer;
-  String _currentAlarmType = ''; // 현재 울리는 알람 타입 ('schedule' 또는 'countdown')
-  // Currently scheduled alarm ID on server
+  String _currentAlarmType = '';
   String? _currentAlarmId;
-  // Currently scheduled local notification ID
   int? _notificationId;
-  // Wake-up time local notification ID
   int? _wakeNotificationId;
 
   // 알람 등록 시 홈 알람 위젯 갱신 콜백
@@ -79,6 +83,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _initializeAnimations();
     _initializeAlarm();
     _requestPermissions();
 
@@ -90,15 +95,792 @@ class _HomePageState extends State<HomePage> {
 
     // Register callback for route alarm set
     RouteStore.onAlarmSet = () {
-      // Immediately mark alarm as scheduled in UI
       setState(() {
         isAlarmScheduleActive = true;
       });
-      // Then refresh alarms from server if needed
       _loadAlarms();
-      // 리로드 오늘 Google Calendar 일정
       _loadTodayGoogleEvents();
     };
+  }
+
+  void _initializeAnimations() {
+    _backgroundAnimationController = AnimationController(
+      duration: const Duration(seconds: 20),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _cardAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    
+    _backgroundAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _backgroundAnimationController!,
+      curve: Curves.easeInOut,
+    ));
+    
+    _cardAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _cardAnimationController!,
+      curve: Curves.easeOutBack,
+    ));
+    
+    _cardAnimationController!.forward();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0E27),
+      body: Stack(
+        children: [
+          // Animated gradient background
+          AnimatedBuilder(
+            animation: _backgroundAnimation ?? AlwaysStoppedAnimation(0.0),
+            builder: (context, child) {
+              return Stack(
+                children: [
+                  // Primary gradient orb
+                  Positioned(
+                    top: -100 + ((_backgroundAnimation?.value ?? 0) * 50),
+                    right: -50,
+                    child: Container(
+                      width: 350,
+                      height: 350,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          colors: [
+                            const Color(0xFF6366F1).withOpacity(0.8),
+                            const Color(0xFF8B5CF6).withOpacity(0.4),
+                            Colors.transparent,
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Secondary gradient orb
+                  Positioned(
+                    bottom: -150 + ((_backgroundAnimation?.value ?? 0) * 30),
+                    left: -100,
+                    child: Transform.rotate(
+                      angle: (_backgroundAnimation?.value ?? 0) * 3.14,
+                      child: Container(
+                        width: 400,
+                        height: 400,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              const Color(0xFF3B82F6).withOpacity(0.6),
+                              const Color(0xFF06B6D4).withOpacity(0.3),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Accent gradient orb
+                  Positioned(
+                    top: MediaQuery.of(context).size.height * 0.4,
+                    right: -80,
+                    child: Container(
+                      width: 200,
+                      height: 200,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          colors: [
+                            const Color(0xFFEC4899).withOpacity(0.5),
+                            const Color(0xFFF43F5E).withOpacity(0.2),
+                            Colors.transparent,
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          // Main content
+          SafeArea(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    _buildHeader(),
+                    const SizedBox(height: 30),
+                    // Search bar
+                    _buildSearchBar(),
+                    const SizedBox(height: 30),
+                    // Alarm card (with route find attached)
+                    if (isAlarmScheduleActive || isCountdownActive) ...[
+                      _buildAlarmCard(),
+                      const SizedBox(height: 20),
+                    ],
+                    // Favorites only quick action
+                    _buildFavoritesQuickAction(),
+                    const SizedBox(height: 20),
+                    // Today's schedule
+                    _buildTodaySchedule(),
+                    const SizedBox(height: 20),
+                    // Favorites
+                    _buildFavorites(),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '안녕하세요 👋',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Lami와 함께해요',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.2),
+                  width: 1.5,
+                ),
+              ),
+              child: const Icon(
+                Icons.notifications_outlined,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const SearchPage()),
+        );
+      },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.2),
+                width: 1.5,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.search,
+                  color: Colors.white.withOpacity(0.7),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '어디로 가시나요?',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRouteAlarmCard() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(30),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(color: Colors.white.withOpacity(0.2), width: 1.5),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Route Find Button
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SearchPage()),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.route, color: Colors.blue),
+                      SizedBox(width: 8),
+                      Text(
+                        '경로 찾기',
+                        style: TextStyle(
+                          color: Colors.blue,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Alarm section inline
+              if (isAlarmScheduleActive || isCountdownActive) ...[
+                // Alarm status indicator
+                if (isAlarmScheduleActive)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.orange.withOpacity(0.5)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.alarm, color: Colors.orange, size: 16),
+                        SizedBox(width: 6),
+                        Text(
+                          '알람 활성화됨',
+                          style: TextStyle(
+                            color: Colors.orange,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 20),
+                // Time display
+                ShaderMask(
+                  shaderCallback: (bounds) => LinearGradient(
+                    colors: [Colors.white, Colors.white.withOpacity(0.8)],
+                  ).createShader(bounds),
+                  child: Text(
+                    _formatDuration(remainingTime),
+                    style: const TextStyle(
+                      fontSize: 48,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '남은 준비 시간',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                // Time info row
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildTimeInfo('도착 시간', _getArrivalTimeString(), Icons.location_on),
+                    ),
+                    Container(
+                      height: 40,
+                      width: 1,
+                      color: Colors.white.withOpacity(0.2),
+                    ),
+                    Expanded(
+                      child: _buildTimeInfo('알람 시간', _getAlarmTimeString(), Icons.alarm),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                // Action buttons
+                if (isAlarmScheduleActive)
+                  _buildGlassButton('알람 취소', Colors.red, _stopAlarmSchedule)
+                else if (isCountdownActive)
+                  _buildGlassButton('타이머 중지', Colors.orange, _stopCountdown)
+                else
+                  _buildGlassButton('알람 설정', Colors.blue, _startAlarmSchedule),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFavoritesQuickAction() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '빠른 실행',
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.9),
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _buildQuickActionCard(
+                '즐겨찾기',
+                Icons.star,
+                const Color(0xFFF59E0B),
+                () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const FavoriteManagementPage(),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuickActionCard(String title, IconData icon, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.2),
+                width: 1.5,
+              ),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: color,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimeInfo(String label, String time, IconData icon) {
+    return Column(
+      children: [
+        Icon(
+          icon,
+          color: Colors.white.withOpacity(0.7),
+          size: 20,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.5),
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          time.isEmpty ? '--:--' : time,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGlassButton(String text, Color color, VoidCallback onPressed) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: color.withOpacity(0.5),
+              width: 1.5,
+            ),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onPressed,
+              borderRadius: BorderRadius.circular(20),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                child: Text(
+                  text,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTodaySchedule() {
+    final today = DateTime.now();
+    final formattedDate = '${today.month}/${today.day} ${_getWeekdayString(today.weekday)}요일';
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '오늘의 일정',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.9),
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(
+              formattedDate,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.5),
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.2),
+                  width: 1.5,
+                ),
+              ),
+              child: _todayGoogleEvents.isEmpty
+                  ? Center(
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.event_available,
+                            color: Colors.white.withOpacity(0.3),
+                            size: 48,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            '오늘 예정된 일정이 없습니다',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.5),
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _todayGoogleEvents.length > 3 ? 3 : _todayGoogleEvents.length,
+                      separatorBuilder: (context, index) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final event = _todayGoogleEvents[index];
+                        final title = event.summary ?? '제목 없음';
+                        final dt = event.start?.dateTime?.toLocal();
+                        final timeStr = dt != null ? DateFormat('HH:mm').format(dt) : '';
+                        
+                        return Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.1),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(
+                                  Icons.event,
+                                  color: Colors.blue,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (timeStr.isNotEmpty)
+                                Text(
+                                  timeStr,
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.7),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFavorites() {
+    final displayFavorites = _favoriteService.getTopFavorites();
+    
+    if (displayFavorites.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '즐겨찾는 장소',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.9),
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const FavoriteManagementPage(),
+                  ),
+                );
+              },
+              child: Text(
+                '모두 보기',
+                style: TextStyle(
+                  color: Colors.blue.withOpacity(0.8),
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 100,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: displayFavorites.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final favorite = displayFavorites[index];
+              return _buildFavoriteCard(favorite);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFavoriteCard(FavoriteRouteModel favorite) {
+    IconData icon;
+    Color color;
+    
+    switch (favorite.category) {
+      case 'home':
+        icon = Icons.home;
+        color = const Color(0xFF10B981);
+        break;
+      case 'work':
+        icon = Icons.work;
+        color = const Color(0xFF3B82F6);
+        break;
+      case 'school':
+        icon = Icons.school;
+        color = const Color(0xFF8B5CF6);
+        break;
+      default:
+        icon = Icons.place;
+        color = const Color(0xFFF59E0B);
+    }
+    
+    return GestureDetector(
+      onTap: () {
+        // Handle favorite tap
+      },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            width: 100,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.2),
+                width: 1.5,
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: color,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  favorite.isDeparture ? favorite.origin : favorite.destination,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _initAlarmApiService() async {
@@ -106,22 +888,17 @@ class _HomePageState extends State<HomePage> {
     final googleId = prefs.getString('googleId') ?? '';
     setState(() { _googleId = googleId; });
     _alarmApiService = AlarmApiService(googleId: googleId);
-    // 서버에 저장된 알람 불러오기
     await _loadAlarms();
   }
 
-  /// 서버에 저장된 알람을 조회하고 홈 화면 위젯 상태를 업데이트합니다.
   Future<void> _loadAlarms() async {
     if (_googleId == null || _googleId!.isEmpty) return;
     try {
       final alarms = await _alarmApiService.getAlarms();
       if (alarms.isEmpty) return;
-      // Clear any previous ID
       _currentAlarmId = null;
       final now = DateTime.now();
-      // Upcoming alarms
       final upcoming = alarms.where((a) => DateTime.parse(a['wakeUpTime']).toLocal().isAfter(now)).toList();
-      // Select candidates: first upcoming with savedRouteId, or upcoming, or any savedRoute, or any alarm
       List<Map<String, dynamic>> candidates = [];
       candidates.addAll(upcoming.where((a) => a['savedRouteId'] != null));
       if (candidates.isEmpty && upcoming.isNotEmpty) {
@@ -131,26 +908,20 @@ class _HomePageState extends State<HomePage> {
         final savedOnly = alarms.where((a) => a['savedRouteId'] != null).toList();
         candidates = savedOnly.isNotEmpty ? savedOnly : alarms;
       }
-      // Sort by wakeUpTime ascending
       candidates.sort((a, b) => DateTime.parse(a['wakeUpTime']).compareTo(DateTime.parse(b['wakeUpTime'])));
       final alarm = candidates.first;
-      // DB에서 가져온 arrivalTime, wakeUpTime 설정
       final arrivalTime = DateTime.parse(alarm['arrivalTime']).toLocal();
       final wakeUpTime = DateTime.parse(alarm['wakeUpTime']).toLocal();
       _dbArrivalTime = arrivalTime;
       _dbWakeUpTime = wakeUpTime;
-      // 저장된 경로 ID를 전역 상태에 설정
       RouteStore.selectedRouteId = alarm['savedRouteId'] as String?;
-      // Store alarm ID for cancellation
       _currentAlarmId = alarm['id'] as String?;
       final prepMinutes = alarm['preparationTime'] as int;
       setState(() {
-        // 준비 시간 및 남은 시간
         preparationTime = Duration(minutes: prepMinutes);
         remainingTime = preparationTime;
         isAlarmScheduleActive = wakeUpTime.isAfter(now);
       });
-      // Schedule alarm check only if wake-up is in the future
       alarmCheckTimer?.cancel();
       if (wakeUpTime.isAfter(now)) {
         alarmCheckTimer = Timer.periodic(
@@ -169,14 +940,12 @@ class _HomePageState extends State<HomePage> {
       }
       // Schedule local notifications for this alarm
       if (wakeUpTime.isAfter(now)) {
-        // Cancel previously scheduled notifications
         if (_notificationId != null) {
           await NotificationService.cancelNotification(_notificationId!);
         }
         if (_wakeNotificationId != null) {
           await NotificationService.cancelNotification(_wakeNotificationId!);
         }
-        // Prepare timings
         final startDt = wakeUpTime.subtract(preparationTime);
         final alarmTimeStr = _getAlarmTimeString();
         final now2 = DateTime.now();
@@ -202,12 +971,10 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // 알람 초기화
   Future<void> _initializeAlarm() async {
     _audioPlayer = AudioPlayer();
   }
 
-  // 권한 요청
   Future<void> _requestPermissions() async {
     await Permission.notification.request();
   }
@@ -215,11 +982,9 @@ class _HomePageState extends State<HomePage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 로그인 상태 변경 시 알람 API 서비스 및 알람 데이터 초기화
     _initAlarmApiService();
   }
 
-  // 상태 갱신 함수
   void _refreshState() {
     if (mounted) {
       setState(() {});
@@ -228,27 +993,23 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
-    // EventService 리스너 제거
+    _backgroundAnimationController?.dispose();
+    _cardAnimationController?.dispose();
     _eventService.removeListener(_refreshState);
     _favoriteService.removeListener(_refreshState);
     countdownTimer?.cancel();
     alarmCheckTimer?.cancel();
     _stopAlarm();
     _audioPlayer?.dispose();
-    // Route alarm callback 해제
     RouteStore.onAlarmSet = null;
     super.dispose();
   }
 
-  // 알람예정시간 스케줄 시작
   Future<void> _startAlarmSchedule() async {
-    // 기존 타이머들 취소
     alarmCheckTimer?.cancel();
     countdownTimer?.cancel();
 
-    // 서버에 알람 등록
     try {
-      // arrivalDateTime 계산 (서버 계산에도 참고용)
       final now = DateTime.now();
       var hour24 = arrivalHour;
       if (arrivalPeriod == '오후' && arrivalHour != 12) hour24 += 12;
@@ -261,29 +1022,26 @@ class _HomePageState extends State<HomePage> {
         preparationTime: preparationTime.inMinutes,
       );
       
-      // Compute notification timings
       final startDt = arrivalDateTime.subtract(preparationTime);
       final arrivalTimeStr = '${arrivalPeriod} ${arrivalHour}:${arrivalMinute.toString().padLeft(2, '0')}';
 
-      // Google Calendar에 일정 추가
       try {
         if (!CalendarService.isSignedIn()) {
           await CalendarService.signIn();
         }
-
+        
         await CalendarService.addEvent(
           summary: '⏰ 알람: ${arrivalTimeStr} 도착 준비',
           start: startDt,
           end: arrivalDateTime,
           description: '준비시간: ${preparationTime.inMinutes}분\n도착 예정: $arrivalTimeStr',
         );
-
+        
         print('✅ 홈 알람 - Google Calendar 일정 추가 성공!');
       } catch (e) {
         print('❌ 홈 알람 - 캘린더 추가 실패: $e');
       }
 
-      // Schedule local notifications regardless of CalendarService result
       final now2 = DateTime.now();
       if (startDt.isAfter(now2)) {
         _notificationId = startDt.millisecondsSinceEpoch ~/ 1000;
@@ -299,7 +1057,7 @@ class _HomePageState extends State<HomePage> {
         id: _wakeNotificationId!,
         title: '⏰ 준비할 시간입니다',
         body: '설정된 도착 시간($arrivalTimeStr)에 맞춰 준비하세요.',
-        scheduledDate: arrivalDateTime,
+        scheduledDate: arrivalDateTime.subtract(preparationTime),
       );
     } catch (e) {
       print('알람 서버 등록 실패: $e');
@@ -310,35 +1068,29 @@ class _HomePageState extends State<HomePage> {
       isCountdownActive = false;
     });
 
-    // 1초마다 알람예정시간 체크
     alarmCheckTimer = Timer.periodic(
       const Duration(seconds: 1),
           (timer) {
         DateTime now = DateTime.now();
         DateTime alarmTime = _getAlarmDateTime();
 
-        // 알람예정시간이 되면
         if (now.isAfter(alarmTime) || now.isAtSameMomentAs(alarmTime)) {
           timer.cancel();
           setState(() {
             isAlarmScheduleActive = false;
           });
 
-          // 알람예정시간 알람 울리기
           _startAlarm('schedule');
         }
       },
     );
   }
 
-  // 알람예정시간 스케줄 중지
   Future<void> _stopAlarmSchedule() async {
-    // Cancel local timer & UI state
     alarmCheckTimer?.cancel();
     setState(() {
       isAlarmScheduleActive = false;
     });
-    // 로컬 알림 취소
     if (_notificationId != null) {
       await NotificationService.cancelNotification(_notificationId!);
       _notificationId = null;
@@ -347,11 +1099,9 @@ class _HomePageState extends State<HomePage> {
       await NotificationService.cancelNotification(_wakeNotificationId!);
       _wakeNotificationId = null;
     }
-    // Delete from server
     if (_currentAlarmId != null) {
       try {
         await _alarmApiService.deleteAlarm(id: _currentAlarmId!);
-        // 저장된 경로 삭제
         final routeId = RouteStore.selectedRouteId;
         if (routeId != null) {
           final resp = await http.delete(
@@ -368,16 +1118,12 @@ class _HomePageState extends State<HomePage> {
         );
       }
       _currentAlarmId = null;
-      // 알람 취소 후 최신 알람 정보 로드
       await _loadAlarms();
     }
   }
 
-  // 알람예정시간 DateTime 계산
   DateTime _getAlarmDateTime() {
     DateTime now = DateTime.now();
-
-    // 도착시간을 DateTime으로 변환
     DateTime arrivalDateTime;
     int hour24 = arrivalHour;
     if (arrivalPeriod == '오후' && arrivalHour != 12) {
@@ -388,16 +1134,13 @@ class _HomePageState extends State<HomePage> {
 
     arrivalDateTime = DateTime(now.year, now.month, now.day, hour24, arrivalMinute);
 
-    // 만약 도착시간이 현재시간보다 이르면 다음날로 설정
     if (arrivalDateTime.isBefore(now)) {
       arrivalDateTime = arrivalDateTime.add(const Duration(days: 1));
     }
 
-    // 알람시간 = 도착시간 - 준비시간
     return arrivalDateTime.subtract(preparationTime);
   }
 
-  // 알람 시작 (타입별로 구분)
   Future<void> _startAlarm(String alarmType) async {
     if (_isAlarmRinging) return;
 
@@ -406,37 +1149,29 @@ class _HomePageState extends State<HomePage> {
       _currentAlarmType = alarmType;
     });
 
-    // 화면 켜짐 유지
     WakelockPlus.enable();
 
-    // 시스템 알림음 재생 (반복)
     _alarmTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
       if (_isAlarmRinging) {
         try {
-          // 시스템 기본 알림음 재생
           await _audioPlayer?.play(AssetSource('sounds/notification.mp3')).catchError((_) async {
-            // 에셋 파일이 없으면 시스템 사운드 사용
             SystemSound.play(SystemSoundType.alert);
           });
         } catch (e) {
-          // 오류 발생 시 시스템 사운드로 대체
           SystemSound.play(SystemSoundType.alert);
         }
       }
     });
 
-    // 진동 시작 (반복)
     _vibrationTimer = Timer.periodic(const Duration(milliseconds: 1000), (timer) {
       if (_isAlarmRinging) {
-        HapticFeedback.heavyImpact(); // 강한 진동
+        HapticFeedback.heavyImpact();
       }
     });
 
-    // 알람 다이얼로그 표시
     _showAlarmDialog(alarmType);
   }
 
-  // 알람 중지
   void _stopAlarm() {
     if (!_isAlarmRinging) return;
 
@@ -451,7 +1186,6 @@ class _HomePageState extends State<HomePage> {
     WakelockPlus.disable();
   }
 
-  // 알람 다이얼로그 표시 (타입별로 구분)
   void _showAlarmDialog(String alarmType) {
     String title = '';
     String message = '';
@@ -465,7 +1199,6 @@ class _HomePageState extends State<HomePage> {
       onPressed = () {
         _stopAlarm();
         Navigator.of(context).pop();
-        // 준비시간 카운트다운 시작
         _startCountdown();
       };
     } else if (alarmType == 'countdown') {
@@ -475,7 +1208,6 @@ class _HomePageState extends State<HomePage> {
       onPressed = () {
         _stopAlarm();
         Navigator.of(context).pop();
-        // 타이머 리셋
         setState(() {
           remainingTime = preparationTime;
         });
@@ -484,109 +1216,143 @@ class _HomePageState extends State<HomePage> {
 
     showDialog(
       context: context,
-      barrierDismissible: false, // 다이얼로그 외부 터치로 닫기 방지
+      barrierDismissible: false,
       builder: (BuildContext context) {
         return WillPopScope(
-          onWillPop: () async => false, // 뒤로가기 버튼 막기
-          child: AlertDialog(
-            title: Row(
-              children: [
-                Icon(
-                  Icons.alarm,
-                  color: Colors.red,
-                  size: 28,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                    color: Colors.red,
-                  ),
-                ),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
+          onWillPop: () async => false,
+          child: Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding: const EdgeInsets.all(24),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.red.shade200),
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.2), width: 1.5),
                   ),
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Icon(
-                        Icons.notifications_active,
-                        size: 48,
-                        color: Colors.red,
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.alarm,
+                              color: Colors.red,
+                              size: 28,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        message,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.red.withOpacity(0.3)),
                         ),
-                        textAlign: TextAlign.center,
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.notifications_active,
+                              size: 48,
+                              color: Colors.red.withOpacity(0.8),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              message,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
-            ),
-            actions: [
-              Container(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: onPressed,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                          alarmType == 'schedule' ? Icons.play_arrow : Icons.alarm_off,
-                          size: 20
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        buttonText,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                      const SizedBox(height: 24),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.red.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.red.withOpacity(0.5),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: onPressed,
+                                borderRadius: BorderRadius.circular(12),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        alarmType == 'schedule' ? Icons.play_arrow : Icons.alarm_off,
+                                        size: 20,
+                                        color: Colors.white,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        buttonText,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-            ],
+            ),
           ),
         );
       },
     );
   }
 
-  // 준비 시간을 설정하는 콜백 함수
   void setPrepTime(Duration newPrepTime) {
     setState(() {
       preparationTime = newPrepTime;
       remainingTime = newPrepTime;
 
-      // 타이머가 실행 중이면 취소
       if (isCountdownActive) {
         countdownTimer?.cancel();
         isCountdownActive = false;
@@ -598,25 +1364,21 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  // 도착 시간을 설정하는 콜백 함수
   void setArrivalTime(String period, int hour, int minute, DateTime date) {
     setState(() {
       arrivalPeriod = period;
       arrivalHour = hour;
       arrivalMinute = minute;
-      arrivalDate = date; // 날짜도 저장
+      arrivalDate = date;
     });
   }
 
-  // 카운트다운 시작 (준비시간 카운트다운)
   void _startCountdown() {
-    // 기존 타이머 취소
     countdownTimer?.cancel();
 
-    // 새 타이머 시작
     setState(() {
       isCountdownActive = true;
-      remainingTime = preparationTime; // 준비시간으로 리셋
+      remainingTime = preparationTime;
     });
 
     countdownTimer = Timer.periodic(
@@ -628,7 +1390,6 @@ class _HomePageState extends State<HomePage> {
           } else {
             countdownTimer?.cancel();
             isCountdownActive = false;
-            // 준비시간 완료 알람 시작
             _startAlarm('countdown');
           }
         });
@@ -636,7 +1397,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // 카운트다운 중지
   void _stopCountdown() {
     setState(() {
       countdownTimer?.cancel();
@@ -644,7 +1404,6 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  // 포맷팅된 시간 문자열 반환 (00:00:00 형식)
   String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
     String hours = twoDigits(duration.inHours);
@@ -653,7 +1412,6 @@ class _HomePageState extends State<HomePage> {
     return "$hours:$minutes:$seconds";
   }
 
-  // 준비시간 표시 문자열 ("+HH:MM:SS" 형식)
   String _formatPrepTime() {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
     String hours = twoDigits(preparationTime.inHours);
@@ -662,7 +1420,6 @@ class _HomePageState extends State<HomePage> {
     return "+$hours:$minutes:$seconds";
   }
 
-  // 도착시간 표시 문자열 반환
   String _getArrivalTimeString() {
     if (_dbArrivalTime != null) {
       final dt = _dbArrivalTime!;
@@ -674,11 +1431,9 @@ class _HomePageState extends State<HomePage> {
       final minuteStr = minute.toString().padLeft(2, '0');
       return '$period $hourStr:$minuteStr';
     }
-    // DB 데이터 없으면 빈 문자열 반환
     return '';
   }
 
-  // 알람예정시간 계산 및 표시 문자열 반환
   String _getAlarmTimeString() {
     if (_dbWakeUpTime != null) {
       final dt = _dbWakeUpTime!;
@@ -690,12 +1445,10 @@ class _HomePageState extends State<HomePage> {
       final minuteStr = minute.toString().padLeft(2, '0');
       return '$period $hourStr:$minuteStr';
     }
-    // DB 데이터 없으면 빈 문자열 반환
     return '';
   }
 
   void _goToShortestRoutePage() {
-    // 저장된 경로 ID가 없으면 안내 메시지
     final routeId = RouteStore.selectedRouteId;
     if (routeId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -703,7 +1456,6 @@ class _HomePageState extends State<HomePage> {
       );
       return;
     }
-    // 서버에서 상세 경로 조회 및 상세 페이지로 이동
     RouteStore.fetchRouteDetailAndShow(context, routeId);
   }
 
@@ -726,814 +1478,178 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  // 캘린더 페이지로 이동
   void _goToCalendarPage() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const CalendarPage()),
     ).then((_) {
-      // 캘린더 페이지에서 돌아왔을 때 UI 갱신
       setState(() {});
     });
   }
 
-  // 현재 날짜의 요일을 가져오는 함수
   String _getWeekdayString(int weekday) {
     const weekdays = ['월', '화', '수', '목', '금', '토', '일'];
-    return weekdays[weekday - 1]; // weekday는 1(월요일)부터 7(일요일)
+    return weekdays[weekday - 1];
   }
 
-  @override
-  Widget build(BuildContext context) {
-    double verticalGap = 24;
-
-    // 오늘 날짜 가져오기
-    final today = DateTime.now();
-    final formattedDate = '${today.month}/${today.day} ${_getWeekdayString(today.weekday)}요일';
-
-    // 오늘의 Google Calendar 일정 가져오기
-    final todayEvents = _todayGoogleEvents;
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF3EFEE),
-      body: SafeArea(
-        top: true,
-        left: false,
-        right: false,
-        bottom: false,
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // 검색창
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const SearchPage()),
-                    );
-                  },
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.black26, width: 1),
-                    ),
-                    child: AbsorbPointer(
-                      child: TextField(
-                        controller: searchController,
-                        decoration: const InputDecoration(
-                          hintText: '출발, 도착지 검색',
-                          prefixIcon: Icon(Icons.search, color: Colors.black54),
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                    ),
-                  ),
-                ),
-                SizedBox(height: verticalGap),
-                // 남은 준비 시간 카드 (통합된 버전) - 알람 상태 표시 추가
-                GestureDetector(
-                  onTap: _goToTimeSettingPage,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: isAlarmScheduleActive ? Colors.orange.withOpacity(0.1) : Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 2,
-                          offset: Offset(0, 1),
-                        ),
-                      ],
-                      // 알람 울림/예정 상태에 따른 테두리 색상
-                      border: _isAlarmRinging
-                          ? Border.all(color: Colors.red, width: 2)
-                          : (isAlarmScheduleActive ? Border.all(color: Colors.orange, width: 2) : null),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Text(
-                              '남은 준비 시간',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.black87,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            if (_isAlarmRinging) ...[
-                              const SizedBox(width: 8),
-                              Icon(
-                                Icons.alarm,
-                                color: Colors.red,
-                                size: 20,
-                              ),
-                            ],
-                            if (!_isAlarmRinging && isAlarmScheduleActive) ...[
-                              const SizedBox(width: 8),
-                              Icon(
-                                Icons.alarm,
-                                color: Colors.orange,
-                                size: 20,
-                              ),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _formatDuration(remainingTime),
-                          style: TextStyle(
-                            fontSize: 40,
-                            fontWeight: FontWeight.bold,
-                            color: _isAlarmRinging ? Colors.red : Colors.black,
-                            letterSpacing: 2,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              _formatPrepTime(),
-                              style: const TextStyle(
-                                fontSize: 18,
-                                color: Colors.green,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        // 도착시간과 알람예정시간 정보
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            // 설정 도착시간
-                            Column(
-                              children: [
-                                const Text(
-                                  '설정 도착시간',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.black54,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _getArrivalTimeString(),
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.blue,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            // 구분선
-                            Container(
-                              height: 40,
-                              width: 1,
-                              color: Colors.black12,
-                            ),
-                            // 알람예정시간
-                            Column(
-                              children: [
-                                const Text(
-                                  '알람예정시간',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.black54,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _getAlarmTimeString(),
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.orange,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        // 버튼 영역 - 알람 설정 후 바로 활성화된 상태 표시 (시작 버튼 제거)
-                        if (isAlarmScheduleActive)
-                          Column(
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.access_time, color: Colors.blue, size: 16),
-                                  const SizedBox(width: 4),
-                                  const Text(
-                                    '알람예정시간 대기 중...',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.blue,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              ElevatedButton(
-                                onPressed: _stopAlarmSchedule,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red,
-                                  foregroundColor: Colors.white,
-                                  minimumSize: Size(160, 36),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(18),
-                                  ),
-                                ),
-                                child: const Text(
-                                  '알람 취소',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          )
-                        else if (isCountdownActive)
-                            Column(
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.timer, color: Colors.green, size: 16),
-                                    const SizedBox(width: 4),
-                                    const Text(
-                                      '준비시간 카운트다운 진행 중...',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.green,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                ElevatedButton(
-                                  onPressed: _stopCountdown,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red,
-                                    foregroundColor: Colors.white,
-                                    minimumSize: Size(160, 36),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(18),
-                                    ),
-                                  ),
-                                  child: const Text(
-                                    '중지',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(height: verticalGap),
-                // 즐겨찾기 아이콘 섹션 추가
-                _buildFavoriteIcons(),
-                SizedBox(height: verticalGap),
-                // 다음 경로 박스 (기존 교통수단 아이콘들을 대체)
-                GestureDetector(
-                  onTap: _goToShortestRoutePage,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.black26, width: 1),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        // 왼쪽 아이콘 영역
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.shade50,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            Icons.directions,
-                            size: 32,
-                            color: Colors.blue,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        // 중앙 텍스트 영역
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                '다음 경로',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                '최적의 경로를 확인하세요',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.black54,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // 오른쪽 화살표 아이콘
-                        Icon(
-                          Icons.arrow_forward_ios,
-                          size: 20,
-                          color: Colors.black54,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(height: verticalGap),
-                // MM/DD 요일 + 오늘 일정 요약 카드
-                GestureDetector(
-                  onTap: _goToCalendarPage, // 캘린더 페이지로 이동
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.black12, width: 1),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              formattedDate,
-                              style: const TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            const Icon(
-                              Icons.calendar_today,
-                              color: Colors.blue,
-                              size: 22,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        const Divider(height: 1, color: Colors.black12),
-                        const SizedBox(height: 12),
-                        const Text(
-                          '오늘 일정',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black87,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        if (todayEvents.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12.0),
-                            child: Text(
-                              '오늘 예정된 일정이 없습니다',
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: Colors.black54,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          )
-                        else
-                          ListView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: todayEvents.length > 3 ? 3 : todayEvents.length,
-                            itemBuilder: (context, index) {
-                              final evt = todayEvents[index];
-                              final title = evt.summary ?? '제목 없음';
-                              final dt = evt.start?.dateTime?.toLocal();
-                              final timeStr = dt != null ? DateFormat('HH:mm').format(dt) : '';
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4.0),
-                                child: Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.shade50,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.blue.shade200),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.event, color: Colors.blue, size: 16),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          title,
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w500,
-                                            color: Colors.black87,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      if (timeStr.isNotEmpty)
-                                        Text(timeStr, style: const TextStyle(fontSize: 12, color: Colors.black54)),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // 즐겨찾기 아이콘 섹션
-  Widget _buildFavoriteIcons() {
-    return _buildAllFavorites();
-  }
-  
-  // 통합된 즐겨찾기 섹션
-  Widget _buildAllFavorites() {
-    // 모든 즐겨찾기를 가져옵니다 (최대 4개)
-    final displayFavorites = _favoriteService.getTopFavorites();
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                '즐겨찾는 장소',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const FavoriteManagementPage(),
-                    ),
-                  ).then((_) => _favoriteService.loadData());
-                },
-                child: Text(
-                  '관리',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.blue[600],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          displayFavorites.isEmpty
-            ? Center(
-                child: Column(
-                  children: [
-                    _buildEmptyFavoriteIcon(isDeparture: false),
-                    const SizedBox(height: 8),
-                    Text(
-                      '즐겨찾는 장소가 없습니다',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            : Wrap(
-                spacing: 16.0, // 가로 간격
-                runSpacing: 16.0, // 세로 간격
-                alignment: WrapAlignment.start,
-                children: [
-                  ...displayFavorites.map((f) => _buildFavoriteIcon(f, isDeparture: f.isDeparture)),
-                ],
-              ),
-        ],
-      ),
-    );
-  }
-
-  // 즐겨찾기 경로 아이콘
-  Widget _buildFavoriteIcon(FavoriteRouteModel favorite, {bool isDeparture = false}) {
-    final iconData = _getFavoriteIconData(favorite.iconName.isNotEmpty ? favorite.iconName : favorite.category);
-    final iconColor = _getFavoriteIconColor(favorite.iconName.isNotEmpty ? favorite.iconName : favorite.category);
-    
-    // 표시할 장소 이름 결정
-    String placeName = '';
-    if (isDeparture) {
-      placeName = favorite.origin;
-    } else {
-      placeName = favorite.destination;
-    }
-    
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => SearchPage(
-              initialDeparture: isDeparture ? favorite.origin : null,
-              initialDepartureAddress: isDeparture ? favorite.originAddress : null,
-              initialDestination: !isDeparture ? favorite.destination : null,
-              initialDestinationAddress: !isDeparture ? favorite.destinationAddress : null,
-            ),
-          ),
-        );
-      },
-      child: Column(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: iconColor,
-              borderRadius: BorderRadius.circular(30),
-              boxShadow: [
-                BoxShadow(
-                  color: iconColor.withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Center(
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Icon(
-                    iconData,
-                    color: Colors.white,
-                    size: 28,
-                  ),
-                  if (isDeparture)
-                    Positioned(
-                      right: 0,
-                      bottom: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(
-                          Icons.departure_board,
-                          color: iconColor,
-                          size: 12,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            placeName,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: Colors.black87,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 빈 즐겨찾기 아이콘
-  Widget _buildEmptyFavoriteIcon({bool isDeparture = false}) {
-    return GestureDetector(
-      onTap: () {
-        // 즐겨찾기 추가 페이지로 이동
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const FavoriteManagementPage(),
-          ),
-        ).then((_) => _favoriteService.loadData());
-      },
-      child: Column(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: Colors.grey[300],
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(
-                color: Colors.grey[400]!,
-                width: 2,
-                style: BorderStyle.solid,
-              ),
-            ),
-            child: Icon(
-              Icons.add,
-              color: Colors.grey[600],
-              size: 28,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '장소 추가',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey[600],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 즐겨찾기 아이콘 데이터
-  IconData _getFavoriteIconData(String iconName) {
-    switch (iconName) {
-      case 'home': return Icons.home;
-      case 'work': return Icons.work;
-      case 'school': return Icons.school;
-      case 'restaurant': return Icons.restaurant;
-      case 'shopping': return Icons.shopping_cart;
-      case 'hospital': return Icons.local_hospital;
-      case 'gas_station': return Icons.local_gas_station;
-      default: return Icons.place;
-    }
-  }
-
-  // 즐겨찾기 아이콘 색상
-  Color _getFavoriteIconColor(String iconName) {
-    switch (iconName) {
-      case 'home': return Colors.green;
-      case 'work': return Colors.blue;
-      case 'school': return Colors.orange;
-      case 'restaurant': return Colors.red;
-      case 'shopping': return Colors.purple;
-      case 'hospital': return Colors.pink;
-      case 'gas_station': return Colors.brown;
-      default: return Colors.grey;
-    }
-  }
-
-  // 즐겨찾기 카테고리 레이블 (한글)
-  String _getCategoryLabel(String category) {
-    switch (category) {
-      case 'general': return '일반';
-      case 'home': return '집';
-      case 'work': return '직장';
-      case 'school': return '학교';
-      case 'restaurant': return '식당';
-      case 'shopping': return '쇼핑';
-      case 'hospital': return '병원';
-      case 'gas_station': return '주유소';
-      default: return category;
-    }
-  }
-
-  // 교통수단 아이콘 위젯 빌더
-  Widget _buildSelectIcon({
-    required IconData icon,
-    required String label,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 90,
-        height: 90,
-        decoration: BoxDecoration(
-          color: selected ? Colors.blue.shade100 : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: selected ? Colors.blue : Colors.black26,
-            width: selected ? 2 : 1,
-          ),
-          boxShadow: selected
-              ? [
-            BoxShadow(
-              color: Colors.blue.withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ]
-              : [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 2,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 32,
-              color: selected ? Colors.blue : Colors.black54,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: selected ? Colors.blue : Colors.black54,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // 오늘 Google Calendar 이벤트 로드
   Future<void> _loadTodayGoogleEvents() async {
     try {
       if (!CalendarService.isSignedIn()) {
         await CalendarService.signIn();
       }
+      
       final now = DateTime.now();
       final startOfDay = DateTime(now.year, now.month, now.day);
       final endOfDay = startOfDay.add(const Duration(days: 1));
+      
       final events = await CalendarService.fetchEvents(
         timeMin: startOfDay,
         timeMax: endOfDay,
-        maxResults: 10,
       );
+      
       setState(() {
         _todayGoogleEvents = events;
       });
     } catch (e) {
-      print('오늘 구글 캘린더 이벤트 로드 실패: $e');
+      print('Google Calendar 이벤트 로드 실패: $e');
     }
+  }
+
+  Widget _buildAlarmCard() {
+    return AnimatedBuilder(
+      animation: _cardAnimation ?? AlwaysStoppedAnimation(1.0),
+      builder: (context, child) {
+        return Transform.scale(
+          scale: 0.9 + ((_cardAnimation?.value ?? 1.0) * 0.1),
+          child: Opacity(
+            opacity: _cardAnimation?.value ?? 1.0,
+            child: GestureDetector(
+              onTap: _goToTimeSettingPage,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(30),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Colors.white.withOpacity(0.15),
+                          Colors.white.withOpacity(0.05),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.2),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 20,
+                          spreadRadius: 5,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Top: Alarm details panel
+                        Column(
+                          children: [
+                            // Alarm status indicator
+                            if (isAlarmScheduleActive)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(color: Colors.orange.withOpacity(0.2), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.orange.withOpacity(0.5))),
+                                child: Row(mainAxisSize: MainAxisSize.min, children: const [Icon(Icons.alarm, color: Colors.orange, size: 16), SizedBox(width: 6), Text('알람 활성화됨', style: TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold))]),
+                              ),
+                            const SizedBox(height: 20),
+                            // Time display and prep info
+                            ShaderMask(shaderCallback: (bounds) => LinearGradient(colors: [Colors.white, Colors.white.withOpacity(0.8)]).createShader(bounds), child: Text(_formatDuration(remainingTime), style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 2))),
+                            const SizedBox(height: 8),
+                            Text('남은 준비 시간', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 16)),
+                            const SizedBox(height: 24),
+                            // Time info row
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildTimeInfo('도착 시간', _getArrivalTimeString(), Icons.location_on),
+                                ),
+                                Container(
+                                  height: 40,
+                                  width: 1,
+                                  color: Colors.white.withOpacity(0.2),
+                                ),
+                                Expanded(
+                                  child: _buildTimeInfo('알람 시간', _getAlarmTimeString(), Icons.alarm),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+                            // Action button
+                            if (isAlarmScheduleActive)
+                              _buildGlassButton('알람 취소', Colors.red, _stopAlarmSchedule)
+                            else if (isCountdownActive)
+                              _buildGlassButton('타이머 중지', Colors.orange, _stopCountdown)
+                            else
+                              _buildGlassButton('알람 설정', Colors.blue, _startAlarmSchedule),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        // Bottom: Route lookup button
+                        _buildRouteButton(),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Button leading to the saved route's detail, styled like a route summary card
+  Widget _buildRouteButton() {
+    return GestureDetector(
+      onTap: () {
+        if (RouteStore.selectedRouteId != null) {
+          RouteStore.fetchRouteDetailAndShow(context, RouteStore.selectedRouteId!);
+        }
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              child: Row(
+                children: [
+                  const Icon(Icons.route, color: Colors.white),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      '경로 조회',
+                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 16),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

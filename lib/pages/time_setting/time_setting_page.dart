@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:ui';
 import 'package:intl/intl.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // SharedPreferences import 추가
-import '../../event_service.dart'; // EventService import 추가
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../event_service.dart';
 import '../../models/route_response.dart';
 import '../../models/summary_response.dart';
-import '../route/route_results_page.dart'; // 경로 결과 페이지 import 추가
+import '../route/route_results_page.dart';
 import '../../config/server_config.dart';
 import '../../services/alarm_api_service.dart';
 
@@ -44,26 +45,19 @@ class TimeSettingPage extends StatefulWidget {
 }
 
 class _TimeSettingPageState extends State<TimeSettingPage> {
-  // 도착 시간
   late String arrivalPeriod;
   late int arrivalHour;
   late int arrivalMinute;
   late DateTime arrivalDate;
-  // 출발지/도착지 정보 복사
   late String? departureName;
   late String? departureAddress;
   late String? destinationName;
   late String? destinationAddress;
-
-  // 준비 시간 (24시간 형식)
   late int prepHour;
   late int prepMinute;
   late int prepSecond;
-
-  // 알람예정시간
   DateTime? alarmTime;
 
-  // EventService 인스턴스
   final EventService _eventService = EventService();
 
   final List<String> periodList = ['오전', '오후'];
@@ -75,22 +69,18 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
   @override
   void initState() {
     super.initState();
-    // 전달받은 출발/도착지 정보 저장
     departureName = widget.departureName;
     departureAddress = widget.departureAddress;
     destinationName = widget.destinationName;
     destinationAddress = widget.destinationAddress;
 
-    // 도착시간 초기값 설정
     arrivalPeriod = widget.initialArrivalPeriod ?? '오전';
     arrivalHour = widget.initialArrivalHour ?? 8;
     arrivalMinute = widget.initialArrivalMinute ?? 0;
 
-    // 도착날짜 초기값 설정 (기본값: 오늘)
     final now = DateTime.now();
     arrivalDate = widget.initialArrivalDate ?? DateTime(now.year, now.month, now.day);
 
-    // 준비시간 초기값 설정 (24시간 형식)
     if (widget.initialPrepTime != null) {
       int totalSeconds = widget.initialPrepTime!.inSeconds;
       prepHour = totalSeconds ~/ 3600;
@@ -102,13 +92,10 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
       prepSecond = 0;
     }
 
-    // 초기 로드 시 알람시간 계산
-          _calculateAlarmTime();
+    _calculateAlarmTime();
   }
 
-  // 알람예정시간 계산
   void _calculateAlarmTime() {
-    // 도착시간을 DateTime으로 변환 (선택된 날짜 기준)
     int hour24 = _convertTo24Hour(arrivalPeriod, arrivalHour);
     DateTime arrivalDateTime = DateTime(
       arrivalDate.year,
@@ -118,73 +105,53 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
       arrivalMinute,
     );
 
-    // 준비시간 계산
-    Duration prepTime = _calculatePrepTime();
+    Duration prepTime = Duration(hours: prepHour, minutes: prepMinute, seconds: prepSecond);
 
-    // 알람예정시간 = 도착시간 - 준비시간
     setState(() {
       alarmTime = arrivalDateTime.subtract(prepTime);
     });
   }
 
-  // 시간 변경 시 알람시간 재계산
   void _onTimeChanged() {
     _calculateAlarmTime();
   }
 
-  // 날짜 선택 다이얼로그
   Future<void> _selectDate(BuildContext context) async {
     try {
-      final DateTime now = DateTime.now();
-      final DateTime today = DateTime(now.year, now.month, now.day);
-
-      final DateTime? picked = await showDatePicker(
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final picked = await showDatePicker(
         context: context,
         initialDate: arrivalDate.isBefore(today) ? today : arrivalDate,
         firstDate: today,
         lastDate: DateTime(now.year + 1, now.month, now.day),
-        builder: (BuildContext context, Widget? child) {
-          return Theme(
-            data: Theme.of(context).copyWith(
-              colorScheme: ColorScheme.light(
-                primary: const Color(0xFF334066),
-                onPrimary: Colors.white,
-                surface: Colors.white,
-                onSurface: const Color(0xFF334066),
-                surfaceVariant: Colors.grey.shade100,
-                onSurfaceVariant: Colors.grey.shade600,
-              ),
-              dialogBackgroundColor: Colors.white,
+        builder: (ctx, child) => Theme(
+          data: Theme.of(ctx).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: const Color(0xFF334066),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: const Color(0xFF334066),
             ),
-            child: child ?? Container(),
-          );
-        },
+          ),
+          child: child!,
+        ),
       );
-
       if (picked != null && picked != arrivalDate) {
-        setState(() {
-          arrivalDate = picked;
-        });
+        setState(() => arrivalDate = picked);
         _onTimeChanged();
       }
     } catch (e) {
-      print('날짜 선택 오류: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('날짜 선택 중 오류가 발생했습니다.'),
-            backgroundColor: Colors.red,
-          ),
+          const SnackBar(content: Text('날짜 선택 중 오류가 발생했습니다.')),
         );
       }
     }
   }
 
-  // 캘린더에 알람 일정 저장
   Future<void> _saveAlarmToCalendar() async {
     if (alarmTime == null) return;
-
-    // 도착 시간 포맷팅
     final arrivalDateTime = DateTime(
       arrivalDate.year,
       arrivalDate.month,
@@ -192,623 +159,332 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
       _convertTo24Hour(arrivalPeriod, arrivalHour),
       arrivalMinute,
     );
-    
-    final arrivalTimeString = DateFormat('HH:mm').format(arrivalDateTime);
-    final prepTime = _calculatePrepTime();
-    
-    try {
-      // 1. 서버 DB에 알람 저장
-      final prefs = await SharedPreferences.getInstance();
-      final googleId = prefs.getString('googleId') ?? '';
-      
-      if (googleId.isEmpty) {
-        throw Exception('사용자 정보를 찾을 수 없습니다.');
-      }
-      
-      // AlarmApiService를 사용하여 서버에 알람 등록
-      final alarmService = AlarmApiService(googleId: googleId);
-      await alarmService.registerAlarm(
-        arrivalTime: arrivalDateTime.toIso8601String(),
-        preparationTime: prepTime.inMinutes,
-      );
-      
-      // 2. EventService를 통해 알람 일정 추가 (로컬 캘린더)
-      _eventService.addAlarmEvent(alarmTime!, arrivalDate, arrivalTimeString);
-      
-      print('알람 일정이 서버와 캘린더에 저장되었습니다:');
-      print('알람 시간: ${DateFormat('yyyy-MM-dd HH:mm').format(alarmTime!)}');
-      print('도착 시간: ${DateFormat('yyyy-MM-dd').format(arrivalDate)} $arrivalTimeString');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('알람이 서버와 캘린더에 저장되었습니다.'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      print('알람 저장 실패: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('알람 저장 실패: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  // 12시간 형식을 24시간 형식으로 변환하는 헬퍼 함수
-  int _convertTo24Hour(String period, int hour) {
-    if (period == '오후' && hour < 12) {
-      return hour + 12;
-    } else if (period == '오전' && hour == 12) {
-      return 0;
-    }
-    return hour;
-  }
-
-  // 준비시간을 Duration으로 변환
-  Duration _calculatePrepTime() {
-    return Duration(
-      hours: prepHour,
-      minutes: prepMinute,
-      seconds: prepSecond,
+    final prefs = await SharedPreferences.getInstance();
+    final googleId = prefs.getString('googleId') ?? '';
+    final alarmService = AlarmApiService(googleId: googleId);
+    await alarmService.registerAlarm(
+      arrivalTime: arrivalDateTime.toIso8601String(),
+      preparationTime: Duration(hours: prepHour, minutes: prepMinute).inMinutes,
     );
-  }
-
-  // 설정 유효성 검사
-  bool _validateSettings() {
-    // 준비시간이 0인지 확인
-    if (prepHour == 0 && prepMinute == 0 && prepSecond == 0) {
+    _eventService.addAlarmEvent(alarmTime!, arrivalDate, DateFormat('HH:mm').format(arrivalDateTime));
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('준비시간은 0보다 커야 합니다.'),
-          backgroundColor: Colors.orange,
-        ),
+        const SnackBar(content: Text('알람이 서버와 캘린더에 저장되었습니다.')),
       );
-      return false;
-    }
-
-    // 알람시간이 현재 시간보다 이전인지 확인
-    if (alarmTime != null && alarmTime!.isBefore(DateTime.now())) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('알람시간이 현재 시간보다 이전입니다. 시간을 조정해주세요.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return false;
-    }
-
-    return true;
-  }
-
-  // 날짜를 한국어 형식으로 포맷팅
-  String _formatDate(DateTime date) {
-    final weekdays = ['일', '월', '화', '수', '목', '금', '토'];
-    final weekday = weekdays[date.weekday % 7];
-
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final tomorrow = today.add(const Duration(days: 1));
-    final targetDate = DateTime(date.year, date.month, date.day);
-
-    if (targetDate == today) {
-      return '오늘 (${date.month}/${date.day})';
-    } else if (targetDate == tomorrow) {
-      return '내일 (${date.month}/${date.day})';
-    } else {
-      return '${date.month}/${date.day} ($weekday)';
     }
   }
 
-  // 시간을 AM/PM 형식으로 포맷팅
-  String _formatTime(DateTime dateTime) {
-    int hour = dateTime.hour;
-    int minute = dateTime.minute;
-    String period = hour >= 12 ? '오후' : '오전';
-    int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-
-    return '$period ${displayHour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
-  }
-
-  // 날짜와 시간을 함께 포맷팅
-  String _formatDateTime(DateTime dateTime) {
-    return '${_formatDate(dateTime)} ${_formatTime(dateTime)}';
+  int _convertTo24Hour(String period, int hour) {
+    if (period == '오후' && hour < 12) return hour + 12;
+    if (period == '오전' && hour == 12) return 0;
+    return hour;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF3EFEE),
+      backgroundColor: const Color(0xFF0A0E27),
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('시간설정'),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-        titleTextStyle: const TextStyle(
-          color: Color(0xFF334066),
-          fontWeight: FontWeight.w700,
-          fontSize: 20,
-        ),
-        iconTheme: const IconThemeData(color: Color(0xFF334066)),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          // 알람 저장 버튼
           IconButton(
             icon: const Icon(Icons.alarm_add),
             onPressed: () async {
-              // 유효성 검사
-              if (!_validateSettings()) {
-                return;
-              }
-              
-              // 알람 저장
+              if (alarmTime == null) return;
               await _saveAlarmToCalendar();
             },
-            tooltip: '알람 저장',
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-              // 출발지·도착지 정보 표시
-              if (departureName != null && destinationName != null) ...[
-                Text('출발: $departureName', style: const TextStyle(fontSize: 16)),
-                const SizedBox(height: 4),
-                Text('도착: $destinationName', style: const TextStyle(fontSize: 16)),
-                const SizedBox(height: 16),
-              ],
-            // 알람예정시간 표시 카드
-            _alarmTimeCard(),
-            const SizedBox(height: 16),
-            // 도착시간설정 카드
-            _arrivalTimeCard(
-              title: '도착시간설정',
-              date: arrivalDate,
-              period: arrivalPeriod,
-              hour: arrivalHour,
-              minute: arrivalMinute,
-              onDateTap: () => _selectDate(context),
-              onPeriodChanged: (val) {
-                setState(() => arrivalPeriod = val);
-                _onTimeChanged();
-              },
-              onHourChanged: (val) {
-                setState(() => arrivalHour = val);
-                _onTimeChanged();
-              },
-              onMinuteChanged: (val) {
-                setState(() => arrivalMinute = val);
-                _onTimeChanged();
-              },
+      body: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFF0A0E27),
+                  const Color(0xFF1A1E3A),
+                ],
+              ),
             ),
-            const SizedBox(height: 16),
-            // 준비시간설정 카드 (24시간 형식)
-            _prepTimeCard(
-              title: '준비시간설정',
-              hour: prepHour,
-              minute: prepMinute,
-              second: prepSecond,
-              onHourChanged: (val) {
-                setState(() => prepHour = val);
-                _onTimeChanged();
-              },
-              onMinuteChanged: (val) {
-                setState(() => prepMinute = val);
-                _onTimeChanged();
-              },
-              onSecondChanged: (val) {
-                setState(() => prepSecond = val);
-                _onTimeChanged();
-              },
-            ),
-            // 설정 완료 버튼
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () async {
-                  // 유효성 검사
-                  if (!_validateSettings()) {
-                    return;
-                  }
-
-                  // 로딩 인디케이터 표시
-                  showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (BuildContext context) {
-                      return const Center(
-                        child: CircularProgressIndicator(),
-                      );
-                    },
-                  );
-
-                  try {
-                      final serverBaseUrl = getServerBaseUrl();
-                      final int hour24 = _convertTo24Hour(arrivalPeriod, arrivalHour);
-                      final String timeString = '${hour24.toString().padLeft(2, '0')}:${arrivalMinute.toString().padLeft(2, '0')}:00';
-                      final String dateString = DateFormat('yyyy-MM-dd').format(arrivalDate);
-                      final String url = '$serverBaseUrl/traffic/routes';
-                      final headers = <String, String>{
-                        'Content-Type': 'application/json; charset=UTF-8',
-                      };
-                      // 사용자 정보 가져오기
-                      final prefs = await SharedPreferences.getInstance();
-                      final googleId = prefs.getString('googleId') ?? '';
-                      
-                      // Log values before submission
-                      debugPrint('DEBUG Submit values -> departureName: $departureName, departureAddress: $departureAddress, destinationName: $destinationName, destinationAddress: $destinationAddress');
-                      final body = jsonEncode({
-                        'fromAddress': departureAddress,
-                        'toAddress': destinationAddress,
-                        'date': dateString,
-                        'time': timeString,
-                        'arriveBy': false,
-                        'googleId': googleId, // 사용자 정보 추가
-                      });
-                      debugPrint('Request POST: $url');
-                      debugPrint('Headers: $headers');
-                      debugPrint('Body: $body');
-                      final response = await http.post(
-                        Uri.parse(url),
-                        headers: headers,
-                        body: body,
-                      );
-                      debugPrint('Response status: ${response.statusCode}');
-                      debugPrint('Response body: ${response.body}');
-                      if (response.statusCode >= 200 && response.statusCode < 300) {
-                        try {
-                        // 응답을 SummaryResponse로 파싱
-                          debugPrint('Starting to parse response...');
-                        final summaryResponse = SummaryResponse.parse(response.body);
-                          debugPrint('SummaryResponse parsed successfully');
-                        final summaryData = summaryResponse.data;
-                          debugPrint('Parsed summaryData: $summaryData');
-                        if (mounted) {
-                          Navigator.of(context).pop(); // 로딩 다이얼로그 닫기
-                            debugPrint('Navigating to RouteResultsPage...');
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => RouteResultsPage(summaryData: summaryData),
-                            ),
-                          );
-                          }
-                        } catch (parseError) {
-                          debugPrint('Parse error: $parseError');
-                          if (mounted) {
-                            Navigator.of(context).pop();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('응답 파싱 실패: $parseError')),
-                            );
-                          }
-                        }
-                      } else {
-                    if (mounted) {
-                      Navigator.of(context).pop();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('경로 조회 실패: ${response.statusCode}')),
-                          );
-                    }
-                      }
-                    } catch (e) {
-                      debugPrint('Error occurred: $e');
-                      if (mounted) {
-                        Navigator.of(context).pop(); // 로딩 다이얼로그 닫기
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('오류가 발생했습니다: $e')),
-                        );
-                      }
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF334066),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  elevation: 2,
-                ),
-                child: const Text(
-                  '설정 완료',
-                  style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold
-                  ),
+          ),
+          Positioned(
+            top: -100,
+            left: -50,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF6366F1).withOpacity(0.3),
+                    Colors.transparent,
+                  ],
                 ),
               ),
             ),
-          ],
+          ),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (departureName != null && destinationName != null) ...[
+                    Text('출발: $departureName', style: const TextStyle(color: Colors.white)),
+                    const SizedBox(height: 4),
+                    Text('도착: $destinationName', style: const TextStyle(color: Colors.white)),
+                    const SizedBox(height: 16),
+                  ],
+                  _alarmTimeCard(),
+                  const SizedBox(height: 16),
+                  _arrivalTimeCard(),
+                  const SizedBox(height: 16),
+                  _prepTimeCard(),
+                  const SizedBox(height: 24),
+                  _submitButton(),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _alarmTimeCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.alarm, color: Colors.blue, size: 32),
+              ),
+              const SizedBox(width: 16),
+              if (alarmTime != null) ...[
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '알람예정시간',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.7),
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(_formatDate(alarmTime!), style: const TextStyle(color: Colors.white70, fontSize: 16)),
+                    Text(_formatTime(alarmTime!), style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ] else ...[
+                const Text('계산 불가', style: TextStyle(color: Colors.white)),
+              ],
+            ],
           ),
         ),
       ),
     );
   }
 
-  // 알람예정시간 표시 카드 (날짜 포함)
-  Widget _alarmTimeCard() {
+  Widget _arrivalTimeCard() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF4A90E2), Color(0xFF357ABD)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+          width: 1,
         ),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.alarm,
-            color: Colors.white,
-            size: 32,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '알람예정시간',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white70,
-                  ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '도착시간설정',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
                 ),
-                const SizedBox(height: 4),
-                if (alarmTime != null)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+              const SizedBox(height: 18),
+              GestureDetector(
+                onTap: () => _selectDate(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withOpacity(0.2)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
+                      const Icon(
+                        Icons.calendar_today,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(width: 8),
                       Text(
-                        _formatDate(alarmTime!),
+                        _formatDate(arrivalDate),
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                           color: Colors.white,
                         ),
                       ),
-                      Text(
-                        _formatTime(alarmTime!),
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
                     ],
-                  )
-                else
-                  const Text(
-                    '계산 불가',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white70,
-                    ),
                   ),
-              ],
-            ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  // 도착시간 카드 (날짜 선택 추가)
-  Widget _arrivalTimeCard({
-    required String title,
-    required DateTime date,
-    required String period,
-    required int hour,
-    required int minute,
-    required VoidCallback onDateTap,
-    required ValueChanged<String> onPeriodChanged,
-    required ValueChanged<int> onHourChanged,
-    required ValueChanged<int> onMinuteChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF334066),
-              letterSpacing: 1,
-            ),
-          ),
-          const SizedBox(height: 18),
-
-          // 날짜 선택 버튼
-          GestureDetector(
-            onTap: onDateTap,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF3EFEE),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF334066).withOpacity(0.2)),
+                ),
               ),
-              child: Row(
+              const SizedBox(height: 18),
+              Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
-                    Icons.calendar_today,
-                    size: 18,
-                    color: Color(0xFF334066),
+                  _buildWheelPicker(
+                    width: 70,
+                    items: periodList,
+                    selectedItem: arrivalPeriod,
+                    onChanged: (val) {
+                      setState(() => arrivalPeriod = val);
+                      _onTimeChanged();
+                    },
+                    label: ' ',
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _formatDate(date),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF334066),
-                    ),
+                  const SizedBox(width: 24),
+                  _buildWheelPicker(
+                    width: 70,
+                    items: hourList.map((e) => e.toString().padLeft(2, '0')).toList(),
+                    selectedItem: arrivalHour.toString().padLeft(2, '0'),
+                    onChanged: (val) {
+                      setState(() => arrivalHour = int.parse(val));
+                      _onTimeChanged();
+                    },
+                    label: '시',
+                  ),
+                  const SizedBox(width: 16),
+                  _buildWheelPicker(
+                    width: 70,
+                    items: minuteList.map((e) => e.toString().padLeft(2, '0')).toList(),
+                    selectedItem: arrivalMinute.toString().padLeft(2, '0'),
+                    onChanged: (val) {
+                      setState(() => arrivalMinute = int.parse(val));
+                      _onTimeChanged();
+                    },
+                    label: '분',
                   ),
                 ],
               ),
-            ),
-          ),
-
-          const SizedBox(height: 18),
-
-          // 시간 선택
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // 오전/오후 피커
-                    _buildWheelPicker(
-                      width: 70,
-                      items: periodList,
-                      selectedItem: period,
-                      onChanged: onPeriodChanged,
-                      label: ' ',
-                    ),
-                    const SizedBox(width: 24),
-                    // 시 피커
-                    _buildWheelPicker(
-                      width: 70,
-                      items: hourList.map((e) => e.toString().padLeft(2, '0')).toList(),
-                      selectedItem: hour.toString().padLeft(2, '0'),
-                      onChanged: (val) => onHourChanged(int.parse(val)),
-                      label: '시',
-                    ),
-                    const SizedBox(width: 16),
-                    // 분 피커
-                    _buildWheelPicker(
-                      width: 70,
-                      items: minuteList.map((e) => e.toString().padLeft(2, '0')).toList(),
-                      selectedItem: minute.toString().padLeft(2, '0'),
-                      onChanged: (val) => onMinuteChanged(int.parse(val)),
-                      label: '분',
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  // 준비시간 카드 (24시간 형식 + 초 추가)
-  Widget _prepTimeCard({
-    required String title,
-    required int hour,
-    required int minute,
-    required int second,
-    required ValueChanged<int> onHourChanged,
-    required ValueChanged<int> onMinuteChanged,
-    required ValueChanged<int> onSecondChanged,
-  }) {
+  Widget _prepTimeCard() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+          width: 1,
+        ),
       ),
-      child: Column(
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF334066),
-              letterSpacing: 1,
-            ),
-          ),
-          const SizedBox(height: 18),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // 시간 피커 (24시간 형식)
-                    _buildWheelPicker(
-                      width: 70,
-                      items: hourList24.map((e) => e.toString().padLeft(2, '0')).toList(),
-                      selectedItem: hour.toString().padLeft(2, '0'),
-                      onChanged: (val) => onHourChanged(int.parse(val)),
-                      label: '시',
-                    ),
-                    const SizedBox(width: 16),
-                    // 분 피커
-                    _buildWheelPicker(
-                      width: 70,
-                      items: minuteList.map((e) => e.toString().padLeft(2, '0')).toList(),
-                      selectedItem: minute.toString().padLeft(2, '0'),
-                      onChanged: (val) => onMinuteChanged(int.parse(val)),
-                      label: '분',
-                    ),
-                    const SizedBox(width: 16),
-                    // 초 피커
-                    _buildWheelPicker(
-                      width: 70,
-                      items: secondList.map((e) => e.toString().padLeft(2, '0')).toList(),
-                      selectedItem: second.toString().padLeft(2, '0'),
-                      onChanged: (val) => onSecondChanged(int.parse(val)),
-                      label: '초',
-                    ),
-                  ],
+              const Text(
+                '준비시간설정',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
                 ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildWheelPicker(
+                    width: 70,
+                    items: hourList24.map((e) => e.toString().padLeft(2, '0')).toList(),
+                    selectedItem: prepHour.toString().padLeft(2, '0'),
+                    onChanged: (val) {
+                      setState(() => prepHour = int.parse(val));
+                      _onTimeChanged();
+                    },
+                    label: '시',
+                  ),
+                  const SizedBox(width: 16),
+                  _buildWheelPicker(
+                    width: 70,
+                    items: minuteList.map((e) => e.toString().padLeft(2, '0')).toList(),
+                    selectedItem: prepMinute.toString().padLeft(2, '0'),
+                    onChanged: (val) {
+                      setState(() => prepMinute = int.parse(val));
+                      _onTimeChanged();
+                    },
+                    label: '분',
+                  ),
+                  const SizedBox(width: 16),
+                  _buildWheelPicker(
+                    width: 70,
+                    items: secondList.map((e) => e.toString().padLeft(2, '0')).toList(),
+                    selectedItem: prepSecond.toString().padLeft(2, '0'),
+                    onChanged: (val) {
+                      setState(() => prepSecond = int.parse(val));
+                      _onTimeChanged();
+                    },
+                    label: '초',
+                  ),
+                ],
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  // 공통 휠 피커 빌더
   Widget _buildWheelPicker({
     required double width,
     required List<String> items,
@@ -818,9 +494,13 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
   }) {
     return Column(
       children: [
-        SizedBox(
+        Container(
           width: width,
           height: 120,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: ListWheelScrollView.useDelegate(
             itemExtent: 36,
             diameterRatio: 1.2,
@@ -835,7 +515,7 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: selectedItem == items[index] ? FontWeight.bold : FontWeight.normal,
-                      color: selectedItem == items[index] ? const Color(0xFF334066) : Colors.black54,
+                      color: selectedItem == items[index] ? Colors.white : Colors.white.withOpacity(0.5),
                     ),
                   ),
                 );
@@ -847,11 +527,145 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
             ),
           ),
         ),
+        const SizedBox(height: 4),
         Text(
           label,
-          style: const TextStyle(fontSize: 14, color: Colors.black38),
+          style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.5)),
         ),
       ],
     );
+  }
+
+  Widget _submitButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: () async {
+          if (prepHour == 0 && prepMinute == 0 && prepSecond == 0) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('준비시간은 0보다 커야 합니다.')),
+            );
+            return;
+          }
+
+          if (alarmTime != null && alarmTime!.isBefore(DateTime.now())) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('알람시간이 현재 시간보다 이전입니다.')),
+            );
+            return;
+          }
+
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (BuildContext context) {
+              return const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              );
+            },
+          );
+
+          try {
+            final serverBaseUrl = getServerBaseUrl();
+            final int hour24 = _convertTo24Hour(arrivalPeriod, arrivalHour);
+            final String timeString = '${hour24.toString().padLeft(2, '0')}:${arrivalMinute.toString().padLeft(2, '0')}:00';
+            final String dateString = DateFormat('yyyy-MM-dd').format(arrivalDate);
+            final String url = '$serverBaseUrl/traffic/routes';
+            final headers = <String, String>{
+              'Content-Type': 'application/json; charset=UTF-8',
+            };
+            final prefs = await SharedPreferences.getInstance();
+            final googleId = prefs.getString('googleId') ?? '';
+            
+            final body = jsonEncode({
+              'fromAddress': departureAddress,
+              'toAddress': destinationAddress,
+              'date': dateString,
+              'time': timeString,
+              'arriveBy': false,
+              'googleId': googleId,
+            });
+            
+            final response = await http.post(
+              Uri.parse(url),
+              headers: headers,
+              body: body,
+            );
+            
+            if (response.statusCode >= 200 && response.statusCode < 300) {
+              try {
+                final summaryResponse = SummaryResponse.parse(response.body);
+                final summaryData = summaryResponse.data;
+                if (mounted) {
+                  Navigator.of(context).pop();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => RouteResultsPage(summaryData: summaryData),
+                    ),
+                  );
+                }
+              } catch (parseError) {
+                if (mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('응답 파싱 실패: $parseError')),
+                  );
+                }
+              }
+            } else {
+              if (mounted) {
+                Navigator.of(context).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('경로 조회 실패: ${response.statusCode}')),
+                );
+              }
+            }
+          } catch (e) {
+            if (mounted) {
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('오류가 발생했습니다: $e')),
+              );
+            }
+          }
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF4A90E2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          elevation: 0,
+        ),
+        child: const Text(
+          '설정 완료',
+          style: TextStyle(
+            fontSize: 18,
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+    final wd = weekdays[date.weekday % 7];
+    final today = DateTime.now();
+    final tomorrow = today.add(const Duration(days: 1));
+    final d = DateTime(date.year, date.month, date.day);
+    if (d == DateTime(today.year, today.month, today.day)) return '오늘 (${date.month}/${date.day})';
+    if (d == DateTime(tomorrow.year, tomorrow.month, tomorrow.day)) return '내일 (${date.month}/${date.day})';
+    return '${date.month}/${date.day} ($wd)';
+  }
+
+  String _formatTime(DateTime dateTime) {
+    final hour = dateTime.hour;
+    final min = dateTime.minute;
+    final period = hour >= 12 ? '오후' : '오전';
+    final displayHour = hour % 12 == 0 ? 12 : hour % 12;
+    return '$period ${displayHour.toString().padLeft(2, '0')}:${min.toString().padLeft(2, '0')}';
   }
 }
