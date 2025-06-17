@@ -191,24 +191,24 @@ class _CalendarPageState extends State<CalendarPage> {
                     child: BackdropFilter(
                       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                       child: TableCalendar<gcal.Event>(
-                        firstDay: DateTime.utc(2000, 1, 1),
-                        lastDay: DateTime.utc(2100, 12, 31),
-                        focusedDay: _focusedDay,
-                        calendarFormat: CalendarFormat.month,
-                        selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                        eventLoader: (day) => _eventsMap[day] ?? [],
-                        onDaySelected: (selected, focused) {
-                          setState(() {
-                            _selectedDay = selected;
-                            _focusedDay = focused;
-                          });
-                        },
-                        onPageChanged: (focusedDay) {
-                          setState(() {
-                            _focusedDay = focusedDay;
-                          });
-                          _loadGoogleCalendarEvents();
-                        },
+            firstDay: DateTime.utc(2000, 1, 1),
+            lastDay: DateTime.utc(2100, 12, 31),
+            focusedDay: _focusedDay,
+            calendarFormat: CalendarFormat.month,
+            selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+            eventLoader: (day) => _eventsMap[day] ?? [],
+            onDaySelected: (selected, focused) {
+              setState(() {
+                _selectedDay = selected;
+                _focusedDay = focused;
+              });
+            },
+            onPageChanged: (focusedDay) {
+              setState(() {
+                _focusedDay = focusedDay;
+              });
+              _loadGoogleCalendarEvents();
+            },
                         calendarStyle: CalendarStyle(
                           outsideDaysVisible: false,
                           weekendTextStyle: const TextStyle(color: Colors.red),
@@ -244,11 +244,11 @@ class _CalendarPageState extends State<CalendarPage> {
                         ),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 8),
+            ),
+          ),
+          const SizedBox(height: 8),
                 // Events list with glass effect
-                Expanded(
+          Expanded(
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
@@ -275,12 +275,12 @@ class _CalendarPageState extends State<CalendarPage> {
                               )
                             : ListView.builder(
                                 padding: const EdgeInsets.all(16),
-                                itemCount: eventsForSelected.length,
-                                itemBuilder: (context, idx) {
-                                  final e = eventsForSelected[idx];
-                                  final time = e.start?.dateTime?.toLocal() != null
-                                      ? DateFormat('HH:mm').format(e.start!.dateTime!.toLocal())
-                                      : '';
+              itemCount: eventsForSelected.length,
+              itemBuilder: (context, idx) {
+                final e = eventsForSelected[idx];
+                final time = e.start?.dateTime?.toLocal() != null
+                    ? DateFormat('HH:mm').format(e.start!.dateTime!.toLocal())
+                    : '';
                                   return Container(
                                     margin: const EdgeInsets.only(bottom: 12),
                                     padding: const EdgeInsets.all(16),
@@ -329,8 +329,8 @@ class _CalendarPageState extends State<CalendarPage> {
                                         ),
                                       ],
                                     ),
-                                  );
-                                },
+                );
+              },
                               ),
                       ),
                     ),

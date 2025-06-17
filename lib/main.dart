@@ -113,25 +113,25 @@ class _MainScreenState extends State<MainScreen> {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: BottomNavigationBar(
-              currentIndex: selectedNavIndex,
-              onTap: (index) {
-                setState(() {
-                  selectedNavIndex = index;
-                });
-              },
+        currentIndex: selectedNavIndex,
+        onTap: (index) {
+          setState(() {
+            selectedNavIndex = index;
+          });
+        },
               backgroundColor: Colors.transparent,
-              selectedItemColor: Colors.blue,
+        selectedItemColor: Colors.blue,
               unselectedItemColor: Colors.white.withOpacity(0.6),
-              type: BottomNavigationBarType.fixed,
-              selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
-              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w400),
+        type: BottomNavigationBarType.fixed,
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
+        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w400),
               elevation: 0,
-              items: const [
-                BottomNavigationBarItem(icon: Icon(Icons.home), label: '홈'),
-                BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: '달력'),
-                BottomNavigationBarItem(icon: Icon(Icons.headset), label: '라미'),
-                BottomNavigationBarItem(icon: Icon(Icons.person), label: '내 정보'),
-              ],
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: '홈'),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: '달력'),
+          BottomNavigationBarItem(icon: Icon(Icons.headset), label: '라미'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: '내 정보'),
+        ],
             ),
           ),
         ),

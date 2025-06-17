@@ -560,7 +560,7 @@ class _RouteResultsPageState extends State<RouteResultsPage> {
                                                               stops[0],
                                                               style: const TextStyle(
                                                                 fontSize: 13,
-                                                          color: Colors.black87,
+                                                          color: Colors.white,
                                                               ),
                                                             ),
                                                           ],
@@ -837,16 +837,36 @@ class _RouteResultsPageState extends State<RouteResultsPage> {
       await showDialog(
         context: context,
         builder: (context) {
-          return AlertDialog(
-            title: const Text('알람 설정'),
-            content: Column(
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            insetPadding: const EdgeInsets.all(24),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.2), width: 1.5),
+                  ),
+                  child: Column(
                     mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      Text('알람 설정', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 16),
                       // 날짜 선택
                       TextField(
                         controller: dateController,
                         readOnly: true,
-                  decoration: const InputDecoration(labelText: '날짜'),
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: '날짜',
+                          labelStyle: TextStyle(color: Colors.white70),
+                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white38)),
+                        ),
                         onTap: () async {
                           final pickedDate = await showDatePicker(
                             context: context,
@@ -860,12 +880,17 @@ class _RouteResultsPageState extends State<RouteResultsPage> {
                           }
                         },
                       ),
-                const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       // 시간 선택
                       TextField(
                         controller: timeController,
                         readOnly: true,
-                  decoration: const InputDecoration(labelText: '도착 시간'),
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: '도착 시간',
+                          labelStyle: TextStyle(color: Colors.white70),
+                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white38)),
+                        ),
                         onTap: () async {
                           final picked = await showTimePicker(
                             context: context,
@@ -877,48 +902,56 @@ class _RouteResultsPageState extends State<RouteResultsPage> {
                           }
                         },
                       ),
-                const SizedBox(height: 8),
+                      const SizedBox(height: 12),
+                      // 준비 시간 입력
                       TextField(
                         controller: prepController,
                         keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: '준비 시간 (분)'),
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: '준비 시간 (분)',
+                          labelStyle: TextStyle(color: Colors.white70),
+                          enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white38)),
                         ),
-              ],
                       ),
-            actions: [
-                          TextButton(
-                child: const Text('취소'),
-                            onPressed: () => Navigator.of(context).pop(),
-                          ),
-                          TextButton(
-                child: const Text('확인'),
-                            onPressed: () async {
-                              prepMinutes = int.tryParse(prepController.text) ?? 0;
-                              final arrivalDate = DateTime(
-                                selectedDate.year,
-                                selectedDate.month,
-                                selectedDate.day,
-                                selectedTime.hour,
-                                selectedTime.minute,
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(child: const Text('취소', style: TextStyle(color: Colors.white70)), onPressed: () => Navigator.of(context).pop()),
+                          const SizedBox(width: 8),
+                          TextButton(child: const Text('확인', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), onPressed: () async {
+                            prepMinutes = int.tryParse(prepController.text) ?? 0;
+                            final arrivalDate = DateTime(
+                              selectedDate.year,
+                              selectedDate.month,
+                              selectedDate.day,
+                              selectedTime.hour,
+                              selectedTime.minute,
+                            );
+                            final arrivalIso = arrivalDate.toIso8601String();
+                            Navigator.of(context).pop();
+                            try {
+                              await _handleAlarmAction(
+                                option,
+                                summaryData,
+                                index,
+                                arrivalIso,
+                                prepMinutes,
                               );
-                              final arrivalIso = arrivalDate.toIso8601String();
-                              Navigator.of(context).pop();
-                              try {
-                                await _handleAlarmAction(
-                                  option,
-                                  summaryData,
-                                  index,
-                                  arrivalIso,
-                                  prepMinutes,
-                                );
-                              } catch (e) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('알람 설정 중 오류: $e')),
-                                );
-                              }
-                            },
-                          ),
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('알람 설정 중 오류: $e')),
+                              );
+                            }
+                          }),
                         ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           );
         },
       );

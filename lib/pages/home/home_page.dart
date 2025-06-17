@@ -1237,7 +1237,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+              children: [
                       Row(
                         children: [
                           Container(
@@ -1247,50 +1247,50 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: const Icon(
-                              Icons.alarm,
-                              color: Colors.red,
-                              size: 28,
-                            ),
+                  Icons.alarm,
+                  color: Colors.red,
+                  size: 28,
+                ),
                           ),
                           const SizedBox(width: 12),
-                          Text(
-                            title,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 20,
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
                               color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
+                  ),
+                ),
+              ],
+            ),
                       const SizedBox(height: 20),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
                           color: Colors.red.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: Colors.red.withOpacity(0.3)),
-                        ),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.notifications_active,
-                              size: 48,
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.notifications_active,
+                        size: 48,
                               color: Colors.red.withOpacity(0.8),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              message,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
                       ),
+                      const SizedBox(height: 12),
+                      Text(
+                        message,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
                       const SizedBox(height: 24),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(12),
@@ -1311,33 +1311,33 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                 onTap: onPressed,
                                 borderRadius: BorderRadius.circular(12),
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        alarmType == 'schedule' ? Icons.play_arrow : Icons.alarm_off,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                          alarmType == 'schedule' ? Icons.play_arrow : Icons.alarm_off,
                                         size: 20,
                                         color: Colors.white,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        buttonText,
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        buttonText,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
                                           color: Colors.white,
-                                        ),
-                                      ),
-                                    ],
+                        ),
+                      ),
+                    ],
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                        ),
-                      ),
-                    ],
+                  ),
+                ),
+              ),
+            ],
                   ),
                 ),
               ),
@@ -1539,7 +1539,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           Colors.white.withOpacity(0.15),
                           Colors.white.withOpacity(0.05),
                         ],
-                      ),
+                    ),
                       borderRadius: BorderRadius.circular(30),
                       border: Border.all(
                         color: Colors.white.withOpacity(0.2),
@@ -1569,20 +1569,20 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                             const SizedBox(height: 20),
                             // Time display and prep info
                             ShaderMask(shaderCallback: (bounds) => LinearGradient(colors: [Colors.white, Colors.white.withOpacity(0.8)]).createShader(bounds), child: Text(_formatDuration(remainingTime), style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 2))),
-                            const SizedBox(height: 8),
+                        const SizedBox(height: 8),
                             Text('남은 준비 시간', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 16)),
                             const SizedBox(height: 24),
                             // Time info row
-                            Row(
-                              children: [
+                        Row(
+                          children: [
                                 Expanded(
                                   child: _buildTimeInfo('도착 시간', _getArrivalTimeString(), Icons.location_on),
                                 ),
-                                Container(
-                                  height: 40,
-                                  width: 1,
+                            Container(
+                              height: 40,
+                              width: 1,
                                   color: Colors.white.withOpacity(0.2),
-                                ),
+                            ),
                                 Expanded(
                                   child: _buildTimeInfo('알람 시간', _getAlarmTimeString(), Icons.alarm),
                                 ),
@@ -1590,9 +1590,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                             ),
                             const SizedBox(height: 24),
                             // Action button
-                            if (isAlarmScheduleActive)
+                        if (isAlarmScheduleActive)
                               _buildGlassButton('알람 취소', Colors.red, _stopAlarmSchedule)
-                            else if (isCountdownActive)
+                        else if (isCountdownActive)
                               _buildGlassButton('타이머 중지', Colors.orange, _stopCountdown)
                             else
                               _buildGlassButton('알람 설정', Colors.blue, _startAlarmSchedule),
@@ -1604,15 +1604,15 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       ],
                     ),
                   ),
-                ),
-              ),
             ),
           ),
-        );
+        ),
+      ),
+    );
       },
     );
   }
-
+  
   // Button leading to the saved route's detail, styled like a route summary card
   Widget _buildRouteButton() {
     return GestureDetector(
@@ -1621,8 +1621,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           RouteStore.fetchRouteDetailAndShow(context, RouteStore.selectedRouteId!);
         }
       },
-      child: Container(
-        decoration: BoxDecoration(
+                      child: Container(
+                        decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.1),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
@@ -1634,7 +1634,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               child: Row(
-                children: [
+        children: [
                   const Icon(Icons.route, color: Colors.white),
                   const SizedBox(width: 8),
                   const Expanded(
@@ -1644,8 +1644,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     ),
                   ),
                   const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 16),
-                ],
-              ),
+          ],
+        ),
             ),
           ),
         ),

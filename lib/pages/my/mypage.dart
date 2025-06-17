@@ -98,11 +98,11 @@ class _MyPageState extends State<MyPage> {
           // Main content
           SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 32),
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const SizedBox(height: 32),
                   // Profile avatar with glass effect
                   ClipRRect(
                     borderRadius: BorderRadius.circular(50),
@@ -122,89 +122,89 @@ class _MyPageState extends State<MyPage> {
                         child: const Icon(Icons.person, size: 50, color: Colors.white),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    widget.userName,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              widget.userName,
                     style: const TextStyle(
                       fontSize: 22, 
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    widget.userEmail,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              widget.userEmail,
                     style: TextStyle(
                       fontSize: 16, 
                       color: Colors.white.withOpacity(0.7),
                     ),
-                  ),
-                  const SizedBox(height: 32),
+            ),
+            const SizedBox(height: 32),
                   // Menu items with glass effect
                   _buildGlassMenuItem(
                     icon: Icons.star,
                     iconColor: Colors.amber,
                     title: '자주 사용한 경로',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const FavoritePlacesPage()),
-                      );
-                    },
-                  ),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const FavoritePlacesPage()),
+                );
+              },
+            ),
                   const SizedBox(height: 12),
                   _buildGlassMenuItem(
                     icon: Icons.notifications,
                     iconColor: Colors.blue,
                     title: '업데이트',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const UpdatePage()),
-                      );
-                    },
-                  ),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const UpdatePage()),
+                );
+              },
+            ),
                   const SizedBox(height: 12),
                   _buildGlassMenuItem(
                     icon: Icons.settings,
                     iconColor: Colors.purple,
                     title: '설정',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const SettingsPage()),
-                      );
-                    },
-                  ),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SettingsPage()),
+                );
+              },
+            ),
                   const SizedBox(height: 12),
                   _buildGlassMenuItem(
                     icon: Icons.logout,
                     iconColor: Colors.orange,
                     title: '로그아웃',
-                    onTap: () {
-                      _showLogoutConfirmationDialog(context);
-                    },
-                  ),
+              onTap: () {
+                _showLogoutConfirmationDialog(context);
+              },
+            ),
                   const SizedBox(height: 24),
                   _buildGlassMenuItem(
                     icon: Icons.delete_sweep,
                     iconColor: Colors.red,
                     title: '캐시 지우기',
-                    onTap: () {
-                      _clearCache();
-                    },
-                  ),
+              onTap: () {
+                _clearCache();
+              },
+            ),
                   const SizedBox(height: 12),
                   _buildGlassMenuItem(
                     icon: Icons.notifications_active,
                     iconColor: Colors.green,
                     title: '푸시 알림 테스트',
-                    onTap: () {
-                      _testNotification();
-                    },
-                  ),
-                ],
+              onTap: () {
+                _testNotification();
+              },
+            ),
+          ],
               ),
             ),
           ),

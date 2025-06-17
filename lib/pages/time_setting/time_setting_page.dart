@@ -92,7 +92,7 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
       prepSecond = 0;
     }
 
-    _calculateAlarmTime();
+          _calculateAlarmTime();
   }
 
   void _calculateAlarmTime() {
@@ -127,13 +127,13 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
         lastDate: DateTime(now.year + 1, now.month, now.day),
         builder: (ctx, child) => Theme(
           data: Theme.of(ctx).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: const Color(0xFF334066),
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: const Color(0xFF334066),
+              colorScheme: ColorScheme.light(
+                primary: const Color(0xFF334066),
+                onPrimary: Colors.white,
+                surface: Colors.white,
+                onSurface: const Color(0xFF334066),
             ),
-          ),
+            ),
           child: child!,
         ),
       );
@@ -159,20 +159,20 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
       _convertTo24Hour(arrivalPeriod, arrivalHour),
       arrivalMinute,
     );
-    final prefs = await SharedPreferences.getInstance();
-    final googleId = prefs.getString('googleId') ?? '';
-    final alarmService = AlarmApiService(googleId: googleId);
-    await alarmService.registerAlarm(
-      arrivalTime: arrivalDateTime.toIso8601String(),
+      final prefs = await SharedPreferences.getInstance();
+      final googleId = prefs.getString('googleId') ?? '';
+      final alarmService = AlarmApiService(googleId: googleId);
+      await alarmService.registerAlarm(
+        arrivalTime: arrivalDateTime.toIso8601String(),
       preparationTime: Duration(hours: prepHour, minutes: prepMinute).inMinutes,
-    );
-    _eventService.addAlarmEvent(alarmTime!, arrivalDate, DateFormat('HH:mm').format(arrivalDateTime));
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('알람이 서버와 캘린더에 저장되었습니다.')),
       );
+    _eventService.addAlarmEvent(alarmTime!, arrivalDate, DateFormat('HH:mm').format(arrivalDateTime));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('알람이 서버와 캘린더에 저장되었습니다.')),
+        );
+      }
     }
-  }
 
   int _convertTo24Hour(String period, int hour) {
     if (period == '오후' && hour < 12) return hour + 12;
@@ -234,28 +234,28 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
           ),
           SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (departureName != null && destinationName != null) ...[
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+              if (departureName != null && destinationName != null) ...[
                     Text('출발: $departureName', style: const TextStyle(color: Colors.white)),
-                    const SizedBox(height: 4),
+                const SizedBox(height: 4),
                     Text('도착: $destinationName', style: const TextStyle(color: Colors.white)),
-                    const SizedBox(height: 16),
-                  ],
-                  _alarmTimeCard(),
-                  const SizedBox(height: 16),
+                const SizedBox(height: 16),
+              ],
+            _alarmTimeCard(),
+            const SizedBox(height: 16),
                   _arrivalTimeCard(),
-                  const SizedBox(height: 16),
+            const SizedBox(height: 16),
                   _prepTimeCard(),
                   const SizedBox(height: 24),
                   _submitButton(),
                 ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
       ),
     );
   }
@@ -275,8 +275,8 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
         borderRadius: BorderRadius.circular(20),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Row(
-            children: [
+      child: Row(
+        children: [
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -284,13 +284,13 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.alarm, color: Colors.blue, size: 32),
-              ),
+                ),
               const SizedBox(width: 16),
               if (alarmTime != null) ...[
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
                       '알람예정시간',
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.7),
@@ -300,14 +300,14 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
                     const SizedBox(height: 4),
                     Text(_formatDate(alarmTime!), style: const TextStyle(color: Colors.white70, fontSize: 16)),
                     Text(_formatTime(alarmTime!), style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                  ],
+                    ],
                 ),
               ] else ...[
                 const Text('계산 불가', style: TextStyle(color: Colors.white)),
               ],
-            ],
-          ),
-        ),
+              ],
+            ),
+            ),
       ),
     );
   }
@@ -327,85 +327,85 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
         borderRadius: BorderRadius.circular(20),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Column(
+      child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        children: [
               const Text(
                 '도착시간설정',
                 style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
                   color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 18),
-              GestureDetector(
+            ),
+          ),
+          const SizedBox(height: 18),
+          GestureDetector(
                 onTap: () => _selectDate(context),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  decoration: BoxDecoration(
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.white.withOpacity(0.2)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.calendar_today,
-                        size: 18,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _formatDate(arrivalDate),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ),
-              const SizedBox(height: 18),
-              Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildWheelPicker(
-                    width: 70,
-                    items: periodList,
+                  const Icon(
+                    Icons.calendar_today,
+                    size: 18,
+                        color: Colors.white,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                        _formatDate(arrivalDate),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+                    _buildWheelPicker(
+                      width: 70,
+                      items: periodList,
                     selectedItem: arrivalPeriod,
                     onChanged: (val) {
                       setState(() => arrivalPeriod = val);
                       _onTimeChanged();
                     },
-                    label: ' ',
-                  ),
-                  const SizedBox(width: 24),
-                  _buildWheelPicker(
-                    width: 70,
-                    items: hourList.map((e) => e.toString().padLeft(2, '0')).toList(),
+                      label: ' ',
+                    ),
+                    const SizedBox(width: 24),
+                    _buildWheelPicker(
+                      width: 70,
+                      items: hourList.map((e) => e.toString().padLeft(2, '0')).toList(),
                     selectedItem: arrivalHour.toString().padLeft(2, '0'),
                     onChanged: (val) {
                       setState(() => arrivalHour = int.parse(val));
                       _onTimeChanged();
                     },
-                    label: '시',
-                  ),
-                  const SizedBox(width: 16),
-                  _buildWheelPicker(
-                    width: 70,
-                    items: minuteList.map((e) => e.toString().padLeft(2, '0')).toList(),
+                      label: '시',
+                    ),
+                    const SizedBox(width: 16),
+                    _buildWheelPicker(
+                      width: 70,
+                      items: minuteList.map((e) => e.toString().padLeft(2, '0')).toList(),
                     selectedItem: arrivalMinute.toString().padLeft(2, '0'),
                     onChanged: (val) {
                       setState(() => arrivalMinute = int.parse(val));
                       _onTimeChanged();
                     },
-                    label: '분',
-                  ),
-                ],
+                      label: '분',
+                    ),
+                  ],
               ),
             ],
           ),
@@ -429,54 +429,54 @@ class _TimeSettingPageState extends State<TimeSettingPage> {
         borderRadius: BorderRadius.circular(20),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Column(
+      child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        children: [
               const Text(
                 '준비시간설정',
                 style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
                   color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 18),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildWheelPicker(
-                    width: 70,
-                    items: hourList24.map((e) => e.toString().padLeft(2, '0')).toList(),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+                    _buildWheelPicker(
+                      width: 70,
+                      items: hourList24.map((e) => e.toString().padLeft(2, '0')).toList(),
                     selectedItem: prepHour.toString().padLeft(2, '0'),
                     onChanged: (val) {
                       setState(() => prepHour = int.parse(val));
                       _onTimeChanged();
                     },
-                    label: '시',
-                  ),
-                  const SizedBox(width: 16),
-                  _buildWheelPicker(
-                    width: 70,
-                    items: minuteList.map((e) => e.toString().padLeft(2, '0')).toList(),
+                      label: '시',
+                    ),
+                    const SizedBox(width: 16),
+                    _buildWheelPicker(
+                      width: 70,
+                      items: minuteList.map((e) => e.toString().padLeft(2, '0')).toList(),
                     selectedItem: prepMinute.toString().padLeft(2, '0'),
                     onChanged: (val) {
                       setState(() => prepMinute = int.parse(val));
                       _onTimeChanged();
                     },
-                    label: '분',
-                  ),
-                  const SizedBox(width: 16),
-                  _buildWheelPicker(
-                    width: 70,
-                    items: secondList.map((e) => e.toString().padLeft(2, '0')).toList(),
+                      label: '분',
+                    ),
+                    const SizedBox(width: 16),
+                    _buildWheelPicker(
+                      width: 70,
+                      items: secondList.map((e) => e.toString().padLeft(2, '0')).toList(),
                     selectedItem: prepSecond.toString().padLeft(2, '0'),
                     onChanged: (val) {
                       setState(() => prepSecond = int.parse(val));
                       _onTimeChanged();
                     },
-                    label: '초',
-                  ),
-                ],
+                      label: '초',
+                    ),
+                  ],
               ),
             ],
           ),

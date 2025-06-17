@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import '../../models/route_response.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../config/server_config.dart';
+import 'package:flutter/rendering.dart';
 
 class RouteDetailPage extends StatelessWidget {
   final RouteOption? option;
@@ -127,19 +129,85 @@ class RouteDetailPage extends StatelessWidget {
     final safeTotal = totalSeconds == 0 ? 1.0 : totalSeconds.toDouble();
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         title: Text('${main.origin} → ${main.destination}'),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
+      body: Stack(
+        children: [
+          // Gradient background
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFF0A0E27),
+                  Color(0xFF1A1E3A),
+                ],
+              ),
+            ),
+          ),
+          // Gradient orbs
+          Positioned(
+            top: -100,
+            left: -50,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF6366F1).withOpacity(0.3),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -100,
+            right: -50,
+            child: Container(
+              width: 350,
+              height: 350,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF3B82F6).withOpacity(0.3),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Glass container for detail content
+          SafeArea(
+            child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white.withOpacity(0.2), width: 1.5),
+                    ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header: total time
               Row(
                 children: [
-                  Text('$totalMin분', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                            Text('$totalMin분', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
                   const Spacer(),
                 ],
               ),
@@ -245,13 +313,13 @@ class RouteDetailPage extends StatelessWidget {
                                       : Colors.grey.shade100,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: Text(
-                                  label,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: isFirst || isLast ? iconColor : Colors.white,
-                                  ),
-                                ),
+                                          child: Text(
+                                            label,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              color: Colors.black,
+                                            ),
+                                          ),
                               ),
                             ),
                           ],
@@ -265,6 +333,11 @@ class RouteDetailPage extends StatelessWidget {
             ],
           ),
         ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

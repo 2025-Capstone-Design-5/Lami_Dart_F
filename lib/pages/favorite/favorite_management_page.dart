@@ -105,17 +105,17 @@ class _FavoriteManagementPageState extends State<FavoriteManagementPage> with Si
                   ),
                 ),
                 child: TabBar(
-                  controller: _tabController,
-                  tabs: const [
-                    Tab(text: '즐겨찾기 목록'),
-                    Tab(text: '출발지 추가'),
-                    Tab(text: '목적지 추가'),
-                  ],
+          controller: _tabController,
+          tabs: const [
+            Tab(text: '즐겨찾기 목록'),
+            Tab(text: '출발지 추가'),
+            Tab(text: '목적지 추가'),
+          ],
                   labelColor: Colors.white,
                   unselectedLabelColor: Colors.white.withOpacity(0.6),
-                  indicatorColor: Colors.blue,
-                ),
-              ),
+          indicatorColor: Colors.blue,
+        ),
+      ),
             ),
           ),
         ),
@@ -176,28 +176,28 @@ class _FavoriteManagementPageState extends State<FavoriteManagementPage> with Si
           // Main content
           SafeArea(
             child: TabBarView(
-              controller: _tabController,
-              children: [
-                // 첫 번째 탭: 즐겨찾기 목록
-                Column(
-                  children: [
-                    // 카테고리 필터 탭
-                    _buildCategoryTabs(),
-                    
-                    // 즐겨찾기 목록
-                    Expanded(
-                      child: filteredFavorites.isEmpty
-                          ? _buildEmptyState()
-                          : _buildFavoritesList(filteredFavorites),
-                    ),
-                  ],
-                ),
-                
-                // 두 번째 탭: 출발지 추가
-                _buildAddFavoriteTab(true),
-                
-                // 세 번째 탭: 목적지 추가
-                _buildAddFavoriteTab(false),
+        controller: _tabController,
+        children: [
+          // 첫 번째 탭: 즐겨찾기 목록
+          Column(
+            children: [
+              // 카테고리 필터 탭
+              _buildCategoryTabs(),
+              
+              // 즐겨찾기 목록
+              Expanded(
+                child: filteredFavorites.isEmpty
+                    ? _buildEmptyState()
+                    : _buildFavoritesList(filteredFavorites),
+              ),
+            ],
+          ),
+          
+          // 두 번째 탭: 출발지 추가
+          _buildAddFavoriteTab(true),
+          
+          // 세 번째 탭: 목적지 추가
+          _buildAddFavoriteTab(false),
               ],
             ),
           ),

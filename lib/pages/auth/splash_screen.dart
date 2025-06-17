@@ -79,9 +79,9 @@ class _SplashScreenState extends State<SplashScreen> {
           ),
           // Main content
           Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
                 // 앱 로고 with glass effect
                 Container(
                   padding: const EdgeInsets.all(30),
@@ -107,36 +107,36 @@ class _SplashScreenState extends State<SplashScreen> {
                             decoration: BoxDecoration(
                               color: Colors.blue.withOpacity(0.3),
                               shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.anchor,
-                              size: 80,
-                              color: Colors.white,
-                            ),
-                          );
-                        },
+                  ),
+                  child: const Icon(
+                    Icons.anchor,
+                    size: 80,
+                    color: Colors.white,
+                  ),
+                );
+              },
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 30),
-                // 앱 이름 또는 환영 메시지
-                const Text(
-                  '로딩중',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 50),
-                // 로딩 인디케이터
-                const CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
-                ),
-              ],
             ),
+            const SizedBox(height: 30),
+            // 앱 이름 또는 환영 메시지
+            const Text(
+              '로딩중',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                    color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 50),
+            // 로딩 인디케이터
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+            ),
+          ],
+        ),
           ),
         ],
       ),
